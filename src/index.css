@@ -1,0 +1,112 @@
+/* Google fonts — Fraunces for the brand/display, Plus Jakarta Sans for UI.
+   Must precede all non-@import rules. Falls back to system fonts offline. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* HeroUI v3 styles — this import also pulls in Tailwind CSS v4. */
+@import '@heroui/styles/css';
+
+/* ── Brand design tokens (Tailwind v4 @theme → generates bg-brand-500, etc.) ── */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+
+  /* Warm ivory canvas + surfaces */
+  --color-canvas: #faf6f0;
+  --color-canvas-dark: #0c0a09;
+
+  /* Saffron — the primary brand ramp (Sri Vidya Peetam) */
+  --color-brand-50: #fef4e9;
+  --color-brand-100: #fbe7d3;
+  --color-brand-200: #f6cba6;
+  --color-brand-300: #f0ad78;
+  --color-brand-400: #ec8f45;
+  --color-brand-500: #e8751a;
+  --color-brand-600: #c25010;
+  --color-brand-700: #9e3f0e;
+  --color-brand-800: #7a310d;
+  --color-brand-900: #5c260b;
+
+  /* Supporting brand accents */
+  --color-gold: #e6a419;
+  --color-maroon: #7a1f1f;
+}
+
+:root {
+  color-scheme: light dark;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Warm canvas with a soft saffron/gold aura in the corners. */
+body {
+  color: #1c1917;
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(60rem 60rem at 100% -10%, rgba(232, 117, 26, 0.08), transparent 60%),
+    radial-gradient(50rem 50rem at -10% 110%, rgba(230, 164, 25, 0.07), transparent 55%);
+  background-attachment: fixed;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #f5f5f4;
+    background-color: var(--color-canvas-dark);
+    background-image:
+      radial-gradient(60rem 60rem at 100% -10%, rgba(232, 117, 26, 0.12), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, rgba(122, 31, 31, 0.14), transparent 55%);
+  }
+}
+
+/* Elegant, thin scrollbars that match the warm theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 113, 108, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(120, 113, 108, 0.32);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(120, 113, 108, 0.5);
+}
+
+::selection {
+  background-color: rgba(232, 117, 26, 0.22);
+}
+
+/* Consistent, visible keyboard focus in the brand colour. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

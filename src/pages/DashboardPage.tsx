@@ -55,7 +55,7 @@ export function DashboardPage() {
     : PERSONAL_CHANT_TARGET
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* Greeting hero */}
       <section className="relative mb-7 overflow-hidden rounded-3xl border border-brand-200/50 bg-gradient-to-br from-brand-500 via-brand-600 to-maroon p-7 text-white shadow-xl shadow-brand-500/20">
         <div
@@ -103,7 +103,7 @@ export function DashboardPage() {
       </section>
 
       {/* Mission metrics */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Users}
           label="Registered devotees"
@@ -134,7 +134,7 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Clock}
           label="Pending verifications"

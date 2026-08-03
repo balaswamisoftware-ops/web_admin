@@ -60,7 +60,7 @@ export function DevoteesPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl px-6 py-8 text-left">
+    <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-8 sm:px-6 text-left">
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">

@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
@@ -81,6 +82,15 @@ export function AppShell() {
   const nav = NAV.filter(item => !item.superOnly || admin?.isSuperAdmin)
   const initial = (admin?.fullName ?? 'A').charAt(0).toUpperCase()
 
+  // On phones the nav is a horizontal-scroll strip; keep the active pill in
+  // view whenever the route changes so it never scrolls off-screen.
+  const mobileNavRef = useRef<HTMLDivElement>(null)
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const active = mobileNavRef.current?.querySelector('[aria-current="page"]')
+    active?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [pathname])
+
   return (
     <div className="flex min-h-screen text-stone-900 dark:text-stone-100">
       {/* Sidebar */}
@@ -139,7 +149,10 @@ export function AppShell() {
         </header>
 
         {/* Mobile nav */}
-        <div className="sticky top-[57px] z-10 flex gap-2 overflow-x-auto border-b border-stone-200/70 bg-white/80 px-4 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/70 md:hidden">
+        <div
+          ref={mobileNavRef}
+          className="sticky top-[57px] z-10 flex gap-2 overflow-x-auto border-b border-stone-200/70 bg-white/80 px-4 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/70 md:hidden"
+        >
           {nav.map(item => (
             <NavLink
               key={item.to}

@@ -64,7 +64,7 @@ export function ReportsPage() {
   const v = <T,>(x: T) => (loading || !stats ? '—' : x)
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
           <FileBarChart size={22} />
@@ -75,7 +75,7 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Users} label="Total devotees" value={v(num(stats?.totalDevotees ?? 0))} tint="bg-orange-100 text-orange-700" />
         <StatCard icon={Flame} label="Total chants" value={v(num(stats?.totalChants ?? 0))} tint="bg-rose-100 text-rose-700" />
         <StatCard icon={HandCoins} label="Verified donations" value={v(`₹${num(stats?.totalDonations ?? 0)}`)} tint="bg-emerald-100 text-emerald-700" />

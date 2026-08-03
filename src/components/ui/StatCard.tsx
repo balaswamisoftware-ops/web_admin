@@ -26,7 +26,7 @@ export function StatCard({ icon: Icon, label, value, tint, hint }: StatCardProps
       >
         <Icon size={20} />
       </div>
-      <div className="text-[26px] font-bold leading-tight tracking-tight text-stone-900 dark:text-white">
+      <div className="break-words text-xl font-bold leading-tight tracking-tight text-stone-900 sm:text-[26px] dark:text-white">
         {value}
       </div>
       <div className="mt-0.5 text-sm font-medium text-stone-500">{label}</div>

@@ -8,6 +8,7 @@ import {
   FileBarChart,
   Settings as SettingsIcon,
   ShieldCheck,
+  History,
   LogOut,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -24,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/reports', label: 'Reports', icon: FileBarChart },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, superOnly: true },
   { to: '/admins', label: 'Admins', icon: ShieldCheck, superOnly: true },
+  { to: '/audit', label: 'Audit log', icon: History, superOnly: true },
 ]
 
 function Wordmark() {

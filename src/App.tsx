@@ -9,6 +9,7 @@ import { PaymentsPage } from './pages/PaymentsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AdminsPage } from './pages/AdminsPage'
+import { AuditLogsPage } from './pages/AuditLogsPage'
 
 function Loader() {
   return (
@@ -62,6 +63,7 @@ function App() {
               <Route element={<RequireSuperAdmin />}>
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="admins" element={<AdminsPage />} />
+                <Route path="audit" element={<AuditLogsPage />} />
               </Route>
             </Route>
           </Route>

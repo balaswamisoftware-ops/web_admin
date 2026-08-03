@@ -2,6 +2,12 @@ import type { AdminListItem, CreateAdminInput } from '../types/admin'
 import { isSupabaseConfigured } from '../config/env'
 import { getSupabaseClient } from '../lib/supabaseClient'
 import { invokeWithRetry } from '../lib/invokeWithRetry'
+import { auditService } from './auditService'
+
+/** Log an admin-management op to the audit trail; never block on failure. */
+function audit(action: string, id: string | null, summary: string) {
+  void auditService.logEvent(action, 'admins', id, summary).catch(() => {})
+}
 
 /**
  * Manage admin accounts. Listing and role changes go straight to the DB (guarded
@@ -56,19 +62,26 @@ const supabaseAdmins: AdminsService = {
       fullName: input.fullName.trim(),
       isSuperAdmin: input.isSuperAdmin,
     })
+    audit(
+      'admin.create',
+      null,
+      `Added ${input.isSuperAdmin ? 'super ' : ''}admin ${input.fullName.trim()}`,
+    )
   },
 
   async remove(userId) {
     const supabase = requireClient()
     await invokeWithRetry(supabase, 'admin-users', { action: 'delete', userId })
+    audit('admin.delete', userId, 'Removed an admin')
   },
 
   async setSuperAdmin(userId, value) {
+    // Audited RPC → snapshots the row and makes the role change revertible.
     const supabase = requireClient()
-    const { error } = await supabase
-      .from('admins')
-      .update({ is_super_admin: value })
-      .eq('user_id', userId)
+    const { error } = await supabase.rpc('admin_set_super_admin', {
+      target_user: userId,
+      value,
+    })
     if (error) throw new Error(error.message)
   },
 }

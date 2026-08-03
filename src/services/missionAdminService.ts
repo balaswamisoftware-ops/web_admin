@@ -141,8 +141,8 @@ export const missionAdminService = {
       row.admob_ios_banner = patch.admobIosBanner.trim()
     if (patch.admobIosInterstitial !== undefined)
       row.admob_ios_interstitial = patch.admobIosInterstitial.trim()
-    row.updated_at = new Date().toISOString()
-    const { error } = await client().from('settings').update(row).eq('id', 1)
+    // Go through the audited RPC so the change is snapshotted + revertible.
+    const { error } = await client().rpc('admin_update_settings', { patch: row })
     if (error) throw new Error(error.message)
   },
 }

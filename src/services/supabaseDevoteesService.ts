@@ -6,7 +6,13 @@ import type {
 import { DEVOTEES_TABLE } from '../config/env'
 import { getSupabaseClient } from '../lib/supabaseClient'
 import { invokeWithRetry } from '../lib/invokeWithRetry'
+import { auditService } from './auditService'
 import type { DevoteesService } from './devoteesService'
+
+/** Log an edge-function op to the audit trail; never block the op if it fails. */
+function audit(action: string, id: string | null, summary: string) {
+  void auditService.logEvent(action, 'devotees', id, summary).catch(() => {})
+}
 
 interface DevoteeRow {
   id: string
@@ -61,22 +67,26 @@ export const supabaseDevoteesService: DevoteesService = {
 
   async create(input: CreateDevoteeInput) {
     await invokeAdmin({ action: 'create', ...input })
+    audit('devotee.create', null, `Added devotee ${input.fullName.trim()}`)
   },
 
   async update(id: string, input: UpdateDevoteeInput) {
     await invokeAdmin({ action: 'update', id, ...input })
+    audit('devotee.update', id, `Edited devotee ${input.fullName.trim()}`)
   },
 
   async remove(id: string) {
     await invokeAdmin({ action: 'delete', id })
+    audit('devotee.delete', id, 'Deleted a devotee')
   },
 
   async setBlocked(id: string, blocked: boolean) {
+    // Audited RPC → snapshots the row and makes the block/unblock revertible.
     const supabase = requireClient()
-    const { error } = await supabase
-      .from(DEVOTEES_TABLE)
-      .update({ is_blocked: blocked })
-      .eq('id', id)
+    const { error } = await supabase.rpc('admin_set_devotee_blocked', {
+      devotee_id: id,
+      blocked,
+    })
     if (error) throw new Error(error.message)
   },
 }

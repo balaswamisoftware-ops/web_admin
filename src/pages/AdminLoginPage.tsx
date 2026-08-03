@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Mail, Lock, LogIn, AlertCircle, Users, Flame, ShieldCheck } from 'lucide-react'
 import { useAdminAuth } from '../auth/AdminAuthProvider'
-import { Input, Button, BrandMark } from '../components/ui'
+import { Input, Button, BrandMark, ThemeToggle } from '../components/ui'
 
 const HIGHLIGHTS = [
   { icon: Users, text: 'Manage devotees & registrations' },
@@ -21,7 +21,8 @@ export function AdminLoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="relative grid min-h-screen lg:grid-cols-2">
+      <ThemeToggle className="absolute right-4 top-4 z-10" />
       {/* Brand story panel */}
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-brand-500 via-brand-600 to-maroon p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div

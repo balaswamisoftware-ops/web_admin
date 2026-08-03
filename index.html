@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sri Vidya Peetam — Admin</title>
+    <!-- Set the theme BEFORE first paint so there's no light/dark flash on load. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('admin-theme');
+          var dark =
+            t === 'dark' ||
+            ((!t || t === 'system') &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

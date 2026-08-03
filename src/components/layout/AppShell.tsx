@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAdminAuth } from '../../auth/AdminAuthProvider'
-import { BrandMark } from '../ui'
+import { BrandMark, ThemeToggle } from '../ui'
 
 type NavItem = { to: string; label: string; icon: LucideIcon; superOnly?: boolean; end?: boolean }
 
@@ -120,14 +120,17 @@ export function AppShell() {
               <div className="truncate text-xs text-stone-400">{admin?.email}</div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={signOut}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-          >
-            <LogOut size={17} />
-            Log out
-          </button>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              <LogOut size={17} />
+              Log out
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
@@ -139,13 +142,16 @@ export function AppShell() {
             <BrandMark size={32} />
             <span className="font-display font-semibold">Sri Vidya Peetam</span>
           </div>
-          <button
-            type="button"
-            onClick={signOut}
-            className="rounded-lg px-2 py-1 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
-          >
-            Log out
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={signOut}
+              className="rounded-lg px-2 py-1 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950/30"
+            >
+              Log out
+            </button>
+          </div>
         </header>
 
         {/* Mobile nav */}

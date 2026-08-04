@@ -8,13 +8,15 @@ import {
   Target,
   IndianRupee,
   Bell,
+  Music,
+  Upload,
   CheckCircle2,
   AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
 import type { MissionSettings } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
-import { Button } from '../components/ui'
+import { Button, useToast } from '../components/ui'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
 import { formatIndianCompact } from '../lib/format'
 
@@ -136,7 +138,10 @@ export function SettingsPage() {
   const initialRef = useRef<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
+  const toast = useToast()
+  const audioInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     missionAdminService
@@ -174,6 +179,38 @@ export function SettingsPage() {
       setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Save failed.' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const onAudioFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    if (!file.type.startsWith('audio/')) {
+      toast.error('Please choose an audio file.')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Audio must be under 20 MB.')
+      return
+    }
+    setUploading(true)
+    try {
+      const url = await missionAdminService.uploadAudio(file)
+      setForm(prev =>
+        prev
+          ? {
+              ...prev,
+              audioUrl: url,
+              audioTitle: prev.audioTitle || file.name.replace(/\.[^.]+$/, ''),
+            }
+          : prev,
+      )
+      toast.success('Audio uploaded. Don’t forget to Save.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed.')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -476,6 +513,84 @@ export function SettingsPage() {
                 </Field>
               ))}
             </div>
+          </Section>
+
+          {/* Devotional audio */}
+          <Section
+            icon={Music}
+            title="Devotional audio"
+            description="Upload a chant/audio clip devotees can play in the app — updates without a new build"
+            tint="bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300"
+            className="lg:col-span-2"
+          >
+            {/* Enable toggle */}
+            <div
+              className={`flex items-start justify-between gap-4 rounded-xl border p-4 ${
+                form.audioEnabled
+                  ? 'border-fuchsia-200 bg-fuchsia-50 dark:border-fuchsia-900/50 dark:bg-fuchsia-950/30'
+                  : 'border-stone-200 bg-stone-50 dark:border-neutral-700 dark:bg-neutral-800/50'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-stone-900 dark:text-white">
+                  Show audio player in the app
+                </div>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  {form.audioEnabled
+                    ? 'ON — devotees can play the clip below.'
+                    : 'OFF — no audio player is shown.'}
+                </p>
+              </div>
+              <Toggle checked={form.audioEnabled} onChange={v => set('audioEnabled', v)} />
+            </div>
+
+            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              <Field label="Audio title" hint="Shown to devotees, e.g. “Om Namah Shivaya chant”.">
+                <input
+                  className={inputCls}
+                  value={form.audioTitle}
+                  onChange={e => set('audioTitle', e.target.value)}
+                  placeholder="Om Namah Shivaya"
+                />
+              </Field>
+              <Field label="Audio URL" hint="Uploaded file URL, or paste a public MP3 link.">
+                <input
+                  className={`${inputCls} font-mono text-xs`}
+                  value={form.audioUrl}
+                  onChange={e => set('audioUrl', e.target.value)}
+                  placeholder="https://…/clip.mp3"
+                />
+              </Field>
+            </div>
+
+            {/* Upload + preview */}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={onAudioFile}
+              />
+              <Button
+                variant="secondary"
+                leftIcon={Upload}
+                isPending={uploading}
+                onPress={() => audioInputRef.current?.click()}
+              >
+                {form.audioUrl ? 'Replace audio' : 'Upload audio'}
+              </Button>
+              <span className="text-xs text-stone-400">MP3/M4A/OGG · up to 20 MB</span>
+            </div>
+
+            {form.audioUrl && (
+              <div className="mt-4 rounded-xl border border-stone-200 p-3 dark:border-neutral-800">
+                <div className="mb-2 text-xs font-medium text-stone-500">Preview</div>
+                <audio controls src={form.audioUrl} className="w-full">
+                  Your browser doesn’t support audio playback.
+                </audio>
+              </div>
+            )}
           </Section>
         </div>
       )}

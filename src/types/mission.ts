@@ -56,4 +56,8 @@ export interface MissionSettings {
   admobAndroidInterstitial: string
   admobIosBanner: string
   admobIosInterstitial: string
+  /** Admin-managed devotional audio clip played in the mobile app. */
+  audioEnabled: boolean
+  audioUrl: string
+  audioTitle: string
 }

@@ -96,7 +96,7 @@ export const missionAdminService = {
     const { data, error } = await client()
       .from('settings')
       .select(
-        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial',
+        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title',
       )
       .eq('id', 1)
       .single()
@@ -117,7 +117,23 @@ export const missionAdminService = {
       admobAndroidInterstitial: data.admob_android_interstitial ?? '',
       admobIosBanner: data.admob_ios_banner ?? '',
       admobIosInterstitial: data.admob_ios_interstitial ?? '',
+      audioEnabled: data.audio_enabled ?? false,
+      audioUrl: data.audio_url ?? '',
+      audioTitle: data.audio_title ?? '',
     }
+  },
+
+  /** Upload an audio file to the public app-audio bucket; returns its URL. */
+  async uploadAudio(file: File): Promise<string> {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3'
+    // Stable name so re-uploads replace the old clip (with a cache-buster).
+    const path = `devotional.${ext}`
+    const { error } = await client()
+      .storage.from('app-audio')
+      .upload(path, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
+    if (error) throw new Error(error.message)
+    const { data } = client().storage.from('app-audio').getPublicUrl(path)
+    return `${data.publicUrl}?v=${Date.now()}`
   },
 
   async updateSettings(patch: Partial<MissionSettings>) {
@@ -141,6 +157,9 @@ export const missionAdminService = {
       row.admob_ios_banner = patch.admobIosBanner.trim()
     if (patch.admobIosInterstitial !== undefined)
       row.admob_ios_interstitial = patch.admobIosInterstitial.trim()
+    if (patch.audioEnabled !== undefined) row.audio_enabled = patch.audioEnabled
+    if (patch.audioUrl !== undefined) row.audio_url = patch.audioUrl.trim()
+    if (patch.audioTitle !== undefined) row.audio_title = patch.audioTitle.trim()
     // Go through the audited RPC so the change is snapshotted + revertible.
     const { error } = await client().rpc('admin_update_settings', { patch: row })
     if (error) throw new Error(error.message)

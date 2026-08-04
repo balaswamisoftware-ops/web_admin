@@ -1,10 +1,63 @@
-import { useEffect, useState } from 'react'
-import { Settings as SettingsIcon, Save, QrCode, Smartphone, Megaphone } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Settings as SettingsIcon,
+  Save,
+  QrCode,
+  Smartphone,
+  Megaphone,
+  Target,
+  IndianRupee,
+  Bell,
+  CheckCircle2,
+  AlertTriangle,
+  type LucideIcon,
+} from 'lucide-react'
 import type { MissionSettings } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
 import { Button } from '../components/ui'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
 import { formatIndianCompact } from '../lib/format'
+
+/* ── Small building blocks ────────────────────────────────────────────────── */
+
+const inputCls =
+  'h-11 w-full rounded-xl border border-stone-300 bg-white px-3.5 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-stone-500'
+
+/** A titled settings section with an icon chip and optional description. */
+function Section({
+  icon: Icon,
+  title,
+  description,
+  tint = 'bg-brand-100 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300',
+  children,
+}: {
+  icon: LucideIcon
+  title: string
+  description?: string
+  tint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm shadow-stone-900/[0.03] backdrop-blur-sm sm:p-6 dark:border-white/10 dark:bg-neutral-900/70">
+      <div className="mb-5 flex items-center gap-3">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/5 ${tint}`}
+        >
+          <Icon size={19} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-stone-900 dark:text-white">
+            {title}
+          </h2>
+          {description && (
+            <p className="text-xs text-stone-500 dark:text-stone-400">{description}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </section>
+  )
+}
 
 function Field({
   label,
@@ -17,17 +70,48 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{label}</span>
+      <span className="text-sm font-medium text-stone-700 dark:text-stone-200">
+        {label}
+      </span>
       {children}
-      {hint && <span className="text-xs text-gray-400">{hint}</span>}
+      {hint && <span className="text-xs text-stone-400">{hint}</span>}
     </label>
   )
 }
 
-const inputCls =
-  'h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
+/** An accessible on/off switch. */
+function Toggle({
+  checked,
+  onChange,
+  tone = 'brand',
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  tone?: 'brand' | 'green'
+}) {
+  const on =
+    tone === 'green' ? 'bg-emerald-500' : 'bg-brand-500'
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 ${
+        checked ? on : 'bg-stone-300 dark:bg-neutral-700'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  )
+}
 
-/** Compare dot-separated versions: -1 if a<b, 0 equal, 1 if a>b. */
+/* ── Version compare (for the min > latest warning) ───────────────────────── */
+
 function compareVersions(a: string, b: string): number {
   const pa = String(a).split('.').map(n => parseInt(n, 10) || 0)
   const pb = String(b).split('.').map(n => parseInt(n, 10) || 0)
@@ -41,8 +125,11 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
+/* ── Page ─────────────────────────────────────────────────────────────────── */
+
 export function SettingsPage() {
   const [form, setForm] = useState<MissionSettings | null>(null)
+  const initialRef = useRef<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -50,13 +137,21 @@ export function SettingsPage() {
   useEffect(() => {
     missionAdminService
       .getSettings()
-      .then(setForm)
+      .then(data => {
+        setForm(data)
+        initialRef.current = JSON.stringify(data)
+      })
       .catch(err => setFeedback({ ok: false, msg: err.message }))
       .finally(() => setLoading(false))
   }, [])
 
   const set = <K extends keyof MissionSettings>(key: K, value: MissionSettings[K]) =>
     setForm(prev => (prev ? { ...prev, [key]: value } : prev))
+
+  const dirty = useMemo(
+    () => (form ? JSON.stringify(form) !== initialRef.current : false),
+    [form],
+  )
 
   const versionWarning =
     form && compareVersions(form.minVersion, form.latestVersion) > 0
@@ -69,6 +164,7 @@ export function SettingsPage() {
     setFeedback(null)
     try {
       await missionAdminService.updateSettings(form)
+      initialRef.current = JSON.stringify(form)
       setFeedback({ ok: true, msg: 'Settings saved.' })
     } catch (err) {
       setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Save failed.' })
@@ -79,213 +175,309 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+      {/* Header */}
       <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-gray-300">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-500/20">
           <SettingsIcon size={22} />
         </span>
         <div>
-          <div className="text-xl font-bold text-gray-900 dark:text-white">Settings</div>
-          <div className="text-sm text-gray-500">Mission target, donation &amp; payment details</div>
+          <h1 className="text-xl font-bold text-stone-900 dark:text-white">Settings</h1>
+          <p className="text-sm text-stone-500">
+            Mission goals, payments, app version &amp; ads
+          </p>
         </div>
       </div>
 
       {feedback && (
-        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${feedback.ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
+        <div
+          className={`mb-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+            feedback.ok
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : 'border-red-200 bg-red-50 text-red-600 dark:border-red-900/50 dark:bg-red-950/40'
+          }`}
+        >
+          {feedback.ok ? <CheckCircle2 size={17} /> : <AlertTriangle size={17} />}
           {feedback.msg}
         </div>
       )}
 
       {loading || !form ? (
-        <div className="py-20 text-center text-gray-400">Loading settings…</div>
+        <div className="py-24 text-center text-stone-400">Loading settings…</div>
       ) : (
-        <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field
-              label="Per-devotee chant goal"
-              hint={`Each devotee's personal goal — e.g. 100000 (1 Lakh). Currently ${formatIndianCompact(form.target)}.`}
-            >
-              <input type="number" min={1} className={inputCls} value={form.target}
-                onChange={e => set('target', parseInt(e.target.value, 10) || 0)} />
-            </Field>
-            <Field
-              label="Community achievement goal"
-              hint="Collective goal across all devotees' chants (set in code)."
-            >
-              <input
-                readOnly
-                className={`${inputCls} cursor-not-allowed bg-gray-50 text-gray-500 dark:bg-neutral-800`}
-                value={`${formatIndianCompact(COMMUNITY_CHANT_TARGET)}  (${COMMUNITY_CHANT_TARGET.toLocaleString('en-IN')})`}
+        <div className="space-y-5 pb-24">
+          {/* Mission goals */}
+          <Section
+            icon={Target}
+            title="Mission goals"
+            description="How much each devotee chants toward, and the shared community goal"
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Per-devotee chant goal"
+                hint={`Personal goal — currently ${formatIndianCompact(form.target)}.`}
+              >
+                <input
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  value={form.target}
+                  onChange={e => set('target', parseInt(e.target.value, 10) || 0)}
+                />
+              </Field>
+              <Field
+                label="Community achievement goal"
+                hint="Collective goal across all devotees (set in code)."
+              >
+                <input
+                  readOnly
+                  className={`${inputCls} cursor-not-allowed bg-stone-50 text-stone-500 dark:bg-neutral-800`}
+                  value={`${formatIndianCompact(COMMUNITY_CHANT_TARGET)}  (${COMMUNITY_CHANT_TARGET.toLocaleString('en-IN')})`}
+                />
+              </Field>
+            </div>
+          </Section>
+
+          {/* Donations & payments */}
+          <Section
+            icon={IndianRupee}
+            title="Donations & payments"
+            description="Seva amount and where devotees send their donation"
+            tint="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Donation amount (₹)">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-stone-400">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    className={`${inputCls} pl-7`}
+                    value={form.donationAmount}
+                    onChange={e =>
+                      set('donationAmount', parseInt(e.target.value, 10) || 0)
+                    }
+                  />
+                </div>
+              </Field>
+              <Field label="PhonePe number">
+                <input
+                  className={inputCls}
+                  value={form.phonepeNumber}
+                  onChange={e => set('phonepeNumber', e.target.value)}
+                  placeholder="98xxxxxxxx"
+                />
+              </Field>
+              <Field label="UPI ID">
+                <input
+                  className={inputCls}
+                  value={form.upiId}
+                  onChange={e => set('upiId', e.target.value)}
+                  placeholder="name@upi"
+                />
+              </Field>
+              <Field
+                label="QR code image URL"
+                hint="Public URL of the PhonePe/UPI QR shown to devotees"
+              >
+                <input
+                  className={inputCls}
+                  value={form.qrUrl}
+                  onChange={e => set('qrUrl', e.target.value)}
+                  placeholder="https://…/qr.png"
+                />
+              </Field>
+            </div>
+
+            <div className="mt-4">
+              {form.qrUrl ? (
+                <div className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 dark:border-neutral-800">
+                  <img
+                    src={form.qrUrl}
+                    alt="QR preview"
+                    className="h-24 w-24 rounded-lg object-contain"
+                    onError={e => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                  <span className="text-xs text-stone-400">QR preview</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-xl border border-dashed border-stone-200 px-3 py-4 text-sm text-stone-400 dark:border-neutral-800">
+                  <QrCode size={18} /> No QR set yet
+                </div>
+              )}
+            </div>
+          </Section>
+
+          {/* Announcement */}
+          <Section
+            icon={Bell}
+            title="Announcement"
+            description="An optional banner message shown to devotees in the app"
+            tint="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+          >
+            <textarea
+              rows={3}
+              className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+              placeholder="e.g. Special Maha Shivaratri seva this weekend 🙏"
+              value={form.announcement}
+              onChange={e => set('announcement', e.target.value)}
+            />
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3 dark:border-neutral-800">
+              <div>
+                <div className="text-sm font-medium text-stone-800 dark:text-stone-100">
+                  Mission active
+                </div>
+                <div className="text-xs text-stone-400">
+                  When off, the mission is paused for all devotees.
+                </div>
+              </div>
+              <Toggle
+                checked={form.missionActive}
+                onChange={v => set('missionActive', v)}
               />
-            </Field>
-            <Field label="Donation amount (₹)">
-              <input type="number" min={1} className={inputCls} value={form.donationAmount}
-                onChange={e => set('donationAmount', parseInt(e.target.value, 10) || 0)} />
-            </Field>
-            <Field label="PhonePe number">
-              <input className={inputCls} value={form.phonepeNumber}
-                onChange={e => set('phonepeNumber', e.target.value)} placeholder="98xxxxxxxx" />
-            </Field>
-            <Field label="UPI ID">
-              <input className={inputCls} value={form.upiId}
-                onChange={e => set('upiId', e.target.value)} placeholder="name@upi" />
-            </Field>
-          </div>
-
-          <Field label="QR code image URL" hint="Public URL of the PhonePe/UPI QR shown to devotees">
-            <input className={inputCls} value={form.qrUrl}
-              onChange={e => set('qrUrl', e.target.value)} placeholder="https://…/qr.png" />
-          </Field>
-
-          {form.qrUrl ? (
-            <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 dark:border-neutral-800">
-              <img src={form.qrUrl} alt="QR preview" className="h-24 w-24 rounded-lg object-contain" />
-              <span className="text-xs text-gray-400">QR preview</span>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <QrCode size={18} /> No QR set yet
-            </div>
-          )}
-
-          <Field label="Announcement / banner text" hint="Shown to devotees in the app">
-            <textarea rows={3} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
-              value={form.announcement} onChange={e => set('announcement', e.target.value)} />
-          </Field>
-
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-            <input type="checkbox" className="h-4 w-4 accent-orange-600" checked={form.missionActive}
-              onChange={e => set('missionActive', e.target.checked)} />
-            Mission active
-          </label>
+          </Section>
 
           {/* App version & updates */}
-          <div className="border-t border-gray-100 pt-5 dark:border-neutral-800">
-            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-              <Smartphone size={16} /> App version &amp; updates
-            </div>
-            <p className="mb-4 text-xs text-gray-400">
-              After publishing a new app version, raise <b>Latest version</b> to prompt
-              users to update. Raise <b>Minimum version</b> to force everyone below it to
-              update before they can use the app.
-            </p>
-
+          <Section
+            icon={Smartphone}
+            title="App version & updates"
+            description="Prompt or force devotees to update after you publish a new build"
+            tint="bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+          >
             {versionWarning && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 {versionWarning}
               </div>
             )}
-
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 label="Latest version"
-                hint="Newest published version, e.g. 1.1.0. Users below this see an optional update prompt."
+                hint="Users below this see an optional update prompt."
               >
-                <input className={inputCls} value={form.latestVersion}
-                  onChange={e => set('latestVersion', e.target.value)} placeholder="1.0.0" />
+                <input
+                  className={inputCls}
+                  value={form.latestVersion}
+                  onChange={e => set('latestVersion', e.target.value)}
+                  placeholder="1.0.0"
+                />
               </Field>
               <Field
                 label="Minimum supported version"
-                hint="Users below this are FORCED to update (blocking screen). Keep ≤ latest version."
+                hint="Users below this are FORCED to update. Keep ≤ latest."
               >
-                <input className={inputCls} value={form.minVersion}
-                  onChange={e => set('minVersion', e.target.value)} placeholder="1.0.0" />
+                <input
+                  className={inputCls}
+                  value={form.minVersion}
+                  onChange={e => set('minVersion', e.target.value)}
+                  placeholder="1.0.0"
+                />
               </Field>
             </div>
-
             <div className="mt-5">
               <Field
                 label="Update URL (store link)"
-                hint="Where the Update button sends users — your Play Store / App Store listing."
+                hint="Where the Update button sends users — your store listing."
               >
-                <input className={inputCls} value={form.updateUrl}
+                <input
+                  className={inputCls}
+                  value={form.updateUrl}
                   onChange={e => set('updateUrl', e.target.value)}
-                  placeholder="https://play.google.com/store/apps/details?id=com.srividyapitam" />
+                  placeholder="https://play.google.com/store/apps/details?id=com.srividyapitam"
+                />
               </Field>
             </div>
-          </div>
+          </Section>
 
-          {/* AdMob ad units */}
-          <div className="border-t border-gray-100 pt-5 dark:border-neutral-800">
-            <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-              <Megaphone size={16} /> AdMob ad units
-            </div>
-            <p className="mb-4 text-xs text-gray-400">
-              Paste your AdMob <b>ad-unit IDs</b> (format{' '}
-              <code className="rounded bg-gray-100 px-1 dark:bg-neutral-800">
-                ca-app-pub-XXXXXXXX/YYYYYYYY
-              </code>
-              ). The app picks these up on next launch — no new build needed.
-            </p>
-
-            {/* Master on/off switch for every ad in the app. */}
+          {/* Advertisements */}
+          <Section
+            icon={Megaphone}
+            title="Advertisements"
+            description="Turn ads on/off and set your AdMob unit IDs — no new build needed"
+            tint="bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+          >
+            {/* Master on/off switch */}
             <div
-              className={`mb-4 rounded-xl border p-4 ${
+              className={`flex items-start justify-between gap-4 rounded-xl border p-4 ${
                 form.adsEnabled
-                  ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
-                  : 'border-gray-200 bg-gray-50 dark:border-neutral-700 dark:bg-neutral-800/50'
+                  ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
+                  : 'border-stone-200 bg-stone-50 dark:border-neutral-700 dark:bg-neutral-800/50'
               }`}
             >
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-5 w-5 accent-green-600"
-                  checked={form.adsEnabled}
-                  onChange={e => set('adsEnabled', e.target.checked)}
-                />
-                <span>
-                  <span className="block text-sm font-semibold text-gray-900 dark:text-white">
-                    Show advertisements in the app
-                  </span>
-                  <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-                    {form.adsEnabled
-                      ? 'ON — devotees will see banner and full-screen ads.'
-                      : 'OFF — the app is completely ad-free. Keep it off until the app is published on the Play Store and the ad-unit IDs below are filled in.'}
-                  </span>
-                </span>
-              </label>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-stone-900 dark:text-white">
+                  Show advertisements in the app
+                </div>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  {form.adsEnabled
+                    ? 'ON — devotees will see banner and full-screen ads.'
+                    : 'OFF — the app is completely ad-free. Keep it off until the app is published and the ad-unit IDs below are filled in.'}
+                </p>
+              </div>
+              <Toggle
+                tone="green"
+                checked={form.adsEnabled}
+                onChange={v => set('adsEnabled', v)}
+              />
             </div>
 
             {form.adsEnabled &&
               !form.admobAndroidBanner &&
               !form.admobAndroidInterstitial && (
-                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  Ads are switched ON but no Android ad-unit ID is set — the app
-                  will still show nothing. Fill in the IDs below to start
-                  earning.
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  Ads are ON but no Android ad-unit ID is set — the app will still
+                  show nothing. Fill in the IDs below to start earning.
                 </div>
               )}
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Note: the AdMob <b>App ID</b> is a native setting in{' '}
-              <code>app.json</code> and can’t be changed here — changing it
-              requires a new build.
+
+            <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/60 px-3 py-2 text-xs text-stone-500 dark:border-neutral-800 dark:bg-neutral-800/40 dark:text-stone-400">
+              The AdMob <b>App ID</b> lives in <code>app.json</code> and can’t be
+              changed here — that one needs a new build.
             </div>
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Android — Banner" hint="Anchored banner shown on the screens">
-                <input className={inputCls} value={form.admobAndroidBanner}
-                  onChange={e => set('admobAndroidBanner', e.target.value)}
-                  placeholder="ca-app-pub-…/…" />
-              </Field>
-              <Field label="Android — Interstitial" hint="Full-screen ad after the splash">
-                <input className={inputCls} value={form.admobAndroidInterstitial}
-                  onChange={e => set('admobAndroidInterstitial', e.target.value)}
-                  placeholder="ca-app-pub-…/…" />
-              </Field>
-              <Field label="iOS — Banner" hint="Used when the iOS app is released">
-                <input className={inputCls} value={form.admobIosBanner}
-                  onChange={e => set('admobIosBanner', e.target.value)}
-                  placeholder="ca-app-pub-…/…" />
-              </Field>
-              <Field label="iOS — Interstitial" hint="Used when the iOS app is released">
-                <input className={inputCls} value={form.admobIosInterstitial}
-                  onChange={e => set('admobIosInterstitial', e.target.value)}
-                  placeholder="ca-app-pub-…/…" />
-              </Field>
+            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+              {(
+                [
+                  ['Android — Banner', 'admobAndroidBanner', 'Anchored banner on the screens'],
+                  ['Android — Interstitial', 'admobAndroidInterstitial', 'Full-screen ad after the splash'],
+                  ['iOS — Banner', 'admobIosBanner', 'Used when the iOS app ships'],
+                  ['iOS — Interstitial', 'admobIosInterstitial', 'Used when the iOS app ships'],
+                ] as const
+              ).map(([label, key, hint]) => (
+                <Field key={key} label={label} hint={hint}>
+                  <input
+                    className={`${inputCls} font-mono text-xs`}
+                    value={form[key]}
+                    onChange={e => set(key, e.target.value)}
+                    placeholder="ca-app-pub-…/…"
+                  />
+                </Field>
+              ))}
             </div>
-          </div>
+          </Section>
+        </div>
+      )}
 
-          <div className="flex justify-end pt-2">
-            <Button leftIcon={Save} onPress={save} isPending={saving}>Save settings</Button>
+      {/* Sticky save bar */}
+      {!loading && form && (
+        <div className="sticky bottom-0 -mx-4 border-t border-stone-200/70 bg-white/85 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 dark:border-white/10 dark:bg-neutral-900/80">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <span className="text-xs text-stone-400">
+              {dirty ? 'You have unsaved changes' : 'All changes saved'}
+            </span>
+            <Button
+              leftIcon={Save}
+              onPress={save}
+              isPending={saving}
+              isDisabled={!dirty}
+            >
+              Save settings
+            </Button>
           </div>
         </div>
       )}

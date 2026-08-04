@@ -29,16 +29,20 @@ function Section({
   title,
   description,
   tint = 'bg-brand-100 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300',
+  className = '',
   children,
 }: {
   icon: LucideIcon
   title: string
   description?: string
   tint?: string
+  className?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm shadow-stone-900/[0.03] backdrop-blur-sm sm:p-6 dark:border-white/10 dark:bg-neutral-900/70">
+    <section
+      className={`rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm shadow-stone-900/[0.03] backdrop-blur-sm sm:p-6 dark:border-white/10 dark:bg-neutral-900/70 ${className}`}
+    >
       <div className="mb-5 flex items-center gap-3">
         <span
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/5 ${tint}`}
@@ -174,7 +178,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* Header */}
       <div className="mb-6 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-500/20">
@@ -204,7 +208,7 @@ export function SettingsPage() {
       {loading || !form ? (
         <div className="py-24 text-center text-stone-400">Loading settings…</div>
       ) : (
-        <div className="space-y-5 pb-24">
+        <div className="grid gap-5 pb-24 lg:grid-cols-2 lg:items-start">
           {/* Mission goals */}
           <Section
             icon={Target}
@@ -399,6 +403,7 @@ export function SettingsPage() {
             title="Advertisements"
             description="Turn ads on/off and set your AdMob unit IDs — no new build needed"
             tint="bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+            className="lg:col-span-2"
           >
             {/* Master on/off switch */}
             <div
@@ -440,7 +445,7 @@ export function SettingsPage() {
               changed here — that one needs a new build.
             </div>
 
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {(
                 [
                   ['Android — Banner', 'admobAndroidBanner', 'Anchored banner on the screens'],

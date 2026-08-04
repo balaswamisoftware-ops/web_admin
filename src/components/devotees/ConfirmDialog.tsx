@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '../ui'
+import { useModalA11y } from '../../hooks/useModalA11y'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const ref = useModalA11y(open, onCancel)
   if (!open) return null
 
   return (
@@ -29,6 +31,10 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900"
         onClick={e => e.stopPropagation()}
       >

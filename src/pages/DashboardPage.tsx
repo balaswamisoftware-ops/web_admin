@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import { Users, Flame, Target, HandCoins, Clock, CalendarDays } from 'lucide-react'
+import { Users, Flame, Target, HandCoins, Clock, CalendarDays, AlertCircle, TrendingUp } from 'lucide-react'
 import { useDevotees } from '../hooks/useDevotees'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 import { useAdminAuth } from '../auth/AdminAuthProvider'
 import { formatDate, formatMobile, formatIndianCompact } from '../lib/format'
 import { StatCard } from '../components/ui/StatCard'
+import { BarChart } from '../components/ui/BarChart'
 import {
   COMMUNITY_CHANT_TARGET,
   PERSONAL_CHANT_TARGET,
@@ -28,9 +29,10 @@ const today = new Date().toLocaleDateString('en-IN', {
 })
 
 export function DashboardPage() {
-  const { devotees, total, loading } = useDevotees()
-  const { stats, loading: statsLoading } = useDashboardStats()
+  const { devotees, total, loading, error: devError } = useDevotees()
+  const { stats, loading: statsLoading, error: statsError } = useDashboardStats()
   const { admin } = useAdminAuth()
+  const loadError = devError || statsError
   const firstName = admin?.fullName?.split(' ')[0] ?? 'Admin'
 
   const thisMonth = useMemo(() => {
@@ -42,6 +44,26 @@ export function DashboardPage() {
   }, [devotees])
 
   const recent = useMemo(() => devotees.slice(0, 5), [devotees])
+
+  // New registrations over the last 6 months, for the trend chart.
+  const monthlyRegs = useMemo(() => {
+    const now = new Date()
+    const buckets = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+      return {
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: d.toLocaleString('en-IN', { month: 'short' }),
+        value: 0,
+      }
+    })
+    const idx = new Map(buckets.map((b, i) => [b.key, i]))
+    devotees.forEach(dev => {
+      const c = new Date(dev.createdAt)
+      const i = idx.get(`${c.getFullYear()}-${c.getMonth()}`)
+      if (i != null) buckets[i].value++
+    })
+    return buckets
+  }, [devotees])
 
   const s = <T,>(v: T) => (statsLoading || !stats ? '—' : v)
 
@@ -102,6 +124,13 @@ export function DashboardPage() {
         </div>
       </section>
 
+      {loadError && (
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          <AlertCircle size={18} className="shrink-0" />
+          <span>Couldn’t load dashboard data: {loadError}</span>
+        </div>
+      )}
+
       {/* Mission metrics */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -149,8 +178,28 @@ export function DashboardPage() {
         />
       </div>
 
+      {/* Registrations trend */}
+      <div className="mt-8 rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+            <TrendingUp size={16} />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-stone-900 dark:text-white">
+              New registrations
+            </h2>
+            <p className="text-xs text-stone-400">Devotees joined per month · last 6 months</p>
+          </div>
+        </div>
+        {loading ? (
+          <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
+        ) : (
+          <BarChart data={monthlyRegs} />
+        )}
+      </div>
+
       {/* Recent registrations */}
-      <div className="mt-8 overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-white/10">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">

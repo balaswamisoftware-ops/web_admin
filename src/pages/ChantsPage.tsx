@@ -1,12 +1,20 @@
 import { useState } from 'react'
-import { Flame, Search, RefreshCw, Download, Pencil, X } from 'lucide-react'
+import { Flame, Search, RefreshCw, Download, Pencil, X, ArrowUp, ArrowDown } from 'lucide-react'
 import type { ChantEntry } from '../types/mission'
 import { useChants } from '../hooks/useChants'
-import { Input, Button } from '../components/ui'
+import { useTableControls } from '../hooks/useTableControls'
+import { useModalA11y } from '../hooks/useModalA11y'
+import { Input, Button, Pagination, useToast } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { exportCsv } from '../lib/exportCsv'
 
 const num = (n: number) => n.toLocaleString('en-IN')
+
+const sortAccessors: Record<string, (c: ChantEntry) => string | number> = {
+  devotee: c => c.fullName.toLowerCase(),
+  chants: c => c.count,
+  updated: c => new Date(c.updatedAt).getTime(),
+}
 
 function AdjustDialog({
   entry,
@@ -21,6 +29,7 @@ function AdjustDialog({
 }) {
   const [value, setValue] = useState(String(entry.count))
   const [error, setError] = useState<string | null>(null)
+  const ref = useModalA11y(true, onClose)
 
   const submit = () => {
     const n = parseInt(value, 10)
@@ -30,7 +39,14 @@ function AdjustDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={e => e.stopPropagation()}>
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Adjust chant count"
+        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Adjust chant count</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -60,21 +76,42 @@ function AdjustDialog({
 
 export function ChantsPage() {
   const { chants, total, contributors, loading, error, busyId, query, setQuery, refresh, setCount } = useChants()
+  const toast = useToast()
   const [editing, setEditing] = useState<ChantEntry | null>(null)
+
+  const table = useTableControls(chants, {
+    sortAccessors,
+    initialSortKey: 'chants',
+    initialSortDir: 'desc',
+    pageSize: 20,
+  })
 
   const onSave = async (count: number) => {
     if (!editing) return
-    await setCount(editing.userId, count)
-    setEditing(null)
+    try {
+      await setCount(editing.userId, count)
+      toast.success(`Set ${editing.fullName}'s count to ${num(count)}.`)
+      setEditing(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update count.')
+    }
   }
 
-  const doExport = () =>
+  const doExport = () => {
     exportCsv('chant-report', chants, [
       { header: 'Devotee', value: c => c.fullName },
       { header: 'Mobile', value: c => c.mobile },
       { header: 'Chants', value: c => c.count },
       { header: 'Last updated', value: c => formatDate(c.updatedAt) },
     ])
+    toast.success(`Exported ${chants.length} record(s).`)
+  }
+
+  const cols: { key: string; label: string }[] = [
+    { key: 'devotee', label: 'Devotee' },
+    { key: 'chants', label: 'Chants' },
+    { key: 'updated', label: 'Updated' },
+  ]
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -109,37 +146,60 @@ export function ChantsPage() {
           No chant records yet.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
-          <table className="w-full min-w-[600px] text-left text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-neutral-900">
-                <th className="px-4 py-3 font-semibold">#</th>
-                <th className="px-4 py-3 font-semibold">Devotee</th>
-                <th className="px-4 py-3 font-semibold">Chants</th>
-                <th className="px-4 py-3 font-semibold">Updated</th>
-                <th className="px-4 py-3 text-right font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {chants.map((c, i) => (
-                <tr key={c.userId} className="border-t border-gray-100 hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50">
-                  <td className="px-4 py-3 text-gray-400">{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900 dark:text-white">{c.fullName}</div>
-                    <div className="text-xs text-gray-400">{c.mobile}</div>
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{num(c.count)}</td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(c.updatedAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="ghost" leftIcon={Pencil} isPending={busyId === c.userId} onPress={() => setEditing(c)}>
-                      Adjust
-                    </Button>
-                  </td>
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-neutral-900">
+                  <th className="px-4 py-3 font-semibold">#</th>
+                  {cols.map(col => {
+                    const active = table.sortKey === col.key
+                    return (
+                      <th key={col.key} className={`px-4 py-3 font-semibold ${col.key === 'devotee' ? '' : ''}`}>
+                        <button
+                          type="button"
+                          onClick={() => table.toggleSort(col.key)}
+                          className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-gray-200"
+                        >
+                          {col.label}
+                          {active && (table.sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </button>
+                      </th>
+                    )
+                  })}
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {table.pageRows.map((c, i) => (
+                  <tr key={c.userId} className="border-t border-gray-100 hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50">
+                    <td className="px-4 py-3 text-gray-400">{table.from + i}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-900 dark:text-white">{c.fullName}</div>
+                      <div className="text-xs text-gray-400">{c.mobile}</div>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{num(c.count)}</td>
+                    <td className="px-4 py-3 text-gray-500">{formatDate(c.updatedAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button size="sm" variant="ghost" leftIcon={Pencil} isPending={busyId === c.userId} onPress={() => setEditing(c)}>
+                        Adjust
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            from={table.from}
+            to={table.to}
+            total={table.total}
+            onPage={table.setPage}
+            label="devotees"
+          />
+        </>
       )}
 
       {editing && (

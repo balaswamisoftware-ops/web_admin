@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { ToastProvider } from './components/ui'
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthProvider'
 import { AdminLoginPage } from './pages/AdminLoginPage'
 import { AppShell } from './components/layout/AppShell'
@@ -47,8 +48,9 @@ function LoginRoute() {
 
 function App() {
   return (
-    <AdminAuthProvider>
-      <BrowserRouter>
+    <ToastProvider>
+      <AdminAuthProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
 
@@ -70,8 +72,9 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AdminAuthProvider>
+        </BrowserRouter>
+      </AdminAuthProvider>
+    </ToastProvider>
   )
 }
 

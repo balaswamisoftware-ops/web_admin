@@ -9,11 +9,15 @@ import {
   Ban,
   BadgeCheck,
   ImageOff,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 import type { Donation, DonationStatus } from '../types/mission'
 import { useDonations } from '../hooks/useDonations'
+import { useTableControls } from '../hooks/useTableControls'
+import { useModalA11y } from '../hooks/useModalA11y'
 import { missionAdminService } from '../services/missionAdminService'
-import { Input, Button } from '../components/ui'
+import { Input, Button, Pagination, useToast } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { exportCsv } from '../lib/exportCsv'
 
@@ -40,6 +44,13 @@ const FILTERS: { key: 'all' | DonationStatus; label: string }[] = [
   { key: 'rejected', label: 'Rejected' },
 ]
 
+const sortAccessors: Record<string, (d: Donation) => string | number> = {
+  devotee: d => d.fullName.toLowerCase(),
+  amount: d => d.amount,
+  status: d => d.status,
+  date: d => new Date(d.createdAt).getTime(),
+}
+
 function ReviewDialog({
   donation,
   busy,
@@ -54,6 +65,13 @@ function ReviewDialog({
   const [remarks, setRemarks] = useState(donation.adminRemarks ?? '')
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const [imgLoading, setImgLoading] = useState(true)
+  const [acting, setActing] = useState<DonationStatus | null>(null)
+  const ref = useModalA11y(true, onClose)
+
+  const decide = (status: DonationStatus) => {
+    setActing(status)
+    onDecision(status, remarks)
+  }
 
   useEffect(() => {
     let active = true
@@ -75,13 +93,15 @@ function ReviewDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Verify payment"
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900"
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Verify payment
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Verify payment</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
@@ -122,13 +142,13 @@ function ReviewDialog({
         </label>
 
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="danger-soft" leftIcon={Ban} isDisabled={busy} onPress={() => onDecision('rejected', remarks)}>
+          <Button variant="danger-soft" leftIcon={Ban} isDisabled={busy} isPending={busy && acting === 'rejected'} onPress={() => decide('rejected')}>
             Reject
           </Button>
-          <Button variant="secondary" leftIcon={Check} isDisabled={busy} onPress={() => onDecision('verified', remarks)}>
+          <Button variant="secondary" leftIcon={Check} isDisabled={busy} isPending={busy && acting === 'verified'} onPress={() => decide('verified')}>
             Verify
           </Button>
-          <Button leftIcon={BadgeCheck} isPending={busy} onPress={() => onDecision('completed', remarks)}>
+          <Button leftIcon={BadgeCheck} isDisabled={busy} isPending={busy && acting === 'completed'} onPress={() => decide('completed')}>
             Mark completed
           </Button>
         </div>
@@ -153,15 +173,28 @@ export function PaymentsPage() {
     update,
   } = useDonations()
 
+  const toast = useToast()
   const [review, setReview] = useState<Donation | null>(null)
+
+  const table = useTableControls(donations, {
+    sortAccessors,
+    initialSortKey: 'date',
+    initialSortDir: 'desc',
+    pageSize: 20,
+  })
 
   const onDecision = async (status: DonationStatus, remarks: string) => {
     if (!review) return
-    await update(review.id, status, remarks)
-    setReview(null)
+    try {
+      await update(review.id, status, remarks)
+      toast.success(`Donation marked ${status}.`)
+      setReview(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed.')
+    }
   }
 
-  const doExport = () =>
+  const doExport = () => {
     exportCsv('donations', donations, [
       { header: 'Devotee', value: d => d.fullName },
       { header: 'Mobile', value: d => d.mobile },
@@ -171,6 +204,15 @@ export function PaymentsPage() {
       { header: 'Remarks', value: d => d.adminRemarks ?? '' },
       { header: 'Created', value: d => formatDate(d.createdAt) },
     ])
+    toast.success(`Exported ${donations.length} donation(s).`)
+  }
+
+  const cols: { key: string; label: string }[] = [
+    { key: 'devotee', label: 'Devotee' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'status', label: 'Status' },
+    { key: 'date', label: 'Date' },
+  ]
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -180,9 +222,7 @@ export function PaymentsPage() {
             <HandCoins size={22} />
           </span>
           <div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">
-              Payment Verification
-            </div>
+            <div className="text-xl font-bold text-gray-900 dark:text-white">Payment Verification</div>
             <div className="text-sm text-gray-500">
               {loading ? 'Loading…' : `${total} donations · ${pending} pending`}
             </div>
@@ -228,39 +268,61 @@ export function PaymentsPage() {
           No donations found.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-neutral-900">
-                <th className="px-4 py-3 font-semibold">Devotee</th>
-                <th className="px-4 py-3 font-semibold">Amount</th>
-                <th className="px-4 py-3 font-semibold">Txn ID</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 text-right font-semibold">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {donations.map(d => (
-                <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900 dark:text-white">{d.fullName}</div>
-                    <div className="text-xs text-gray-400">{d.mobile}</div>
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">₹{d.amount}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{d.upiTxnId || '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(d.createdAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="secondary" isPending={busyId === d.id} onPress={() => setReview(d)}>
-                      Review
-                    </Button>
-                  </td>
+        <>
+          <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-neutral-900">
+                  {cols.map(col => {
+                    const active = table.sortKey === col.key
+                    return (
+                      <th key={col.key} className="px-4 py-3 font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => table.toggleSort(col.key)}
+                          className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-gray-200"
+                        >
+                          {col.label}
+                          {active && (table.sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </button>
+                      </th>
+                    )
+                  })}
+                  <th className="px-4 py-3 font-semibold">Txn ID</th>
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {table.pageRows.map(d => (
+                  <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-900 dark:text-white">{d.fullName}</div>
+                      <div className="text-xs text-gray-400">{d.mobile}</div>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">₹{d.amount}</td>
+                    <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
+                    <td className="px-4 py-3 text-gray-500">{formatDate(d.createdAt)}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{d.upiTxnId || '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button size="sm" variant="secondary" isPending={busyId === d.id} onPress={() => setReview(d)}>
+                        Review
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination
+            page={table.page}
+            pageCount={table.pageCount}
+            from={table.from}
+            to={table.to}
+            total={table.total}
+            onPage={table.setPage}
+            label="donations"
+          />
+        </>
       )}
 
       {review && (

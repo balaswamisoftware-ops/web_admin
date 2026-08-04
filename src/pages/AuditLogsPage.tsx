@@ -57,7 +57,7 @@ export function AuditLogsPage() {
       [l.summary, l.actorName, l.action, l.entityType].some(v =>
         (v ?? '').toLowerCase().includes(q),
       ),
-    pageSize: 25,
+    pageSize: 12,
   })
 
   const confirmRevert = async () => {
@@ -138,7 +138,7 @@ export function AuditLogsPage() {
         </div>
       ) : (
         <>
-          <ul className="space-y-2.5">
+          <ul className="max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
             {table.pageRows.map(log => (
               <li
                 key={log.id}

@@ -179,17 +179,29 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-500/20">
-          <SettingsIcon size={22} />
-        </span>
-        <div>
-          <h1 className="text-xl font-bold text-stone-900 dark:text-white">Settings</h1>
-          <p className="text-sm text-stone-500">
-            Mission goals, payments, app version &amp; ads
-          </p>
+      {/* Header — with the Save button on the same row as the title */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-sm shadow-brand-500/20">
+            <SettingsIcon size={22} />
+          </span>
+          <div>
+            <h1 className="text-xl font-bold text-stone-900 dark:text-white">Settings</h1>
+            <p className="text-sm text-stone-500">
+              Mission goals, payments, app version &amp; ads
+            </p>
+          </div>
         </div>
+        {!loading && form && (
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-stone-400 sm:inline">
+              {dirty ? 'Unsaved changes' : 'All changes saved'}
+            </span>
+            <Button leftIcon={Save} onPress={save} isPending={saving} isDisabled={!dirty}>
+              Save settings
+            </Button>
+          </div>
+        )}
       </div>
 
       {feedback && (
@@ -208,7 +220,7 @@ export function SettingsPage() {
       {loading || !form ? (
         <div className="py-24 text-center text-stone-400">Loading settings…</div>
       ) : (
-        <div className="grid gap-5 pb-24 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
           {/* Mission goals */}
           <Section
             icon={Target}
@@ -465,25 +477,6 @@ export function SettingsPage() {
               ))}
             </div>
           </Section>
-        </div>
-      )}
-
-      {/* Sticky save bar */}
-      {!loading && form && (
-        <div className="sticky bottom-0 -mx-4 border-t border-stone-200/70 bg-white/85 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 dark:border-white/10 dark:bg-neutral-900/80">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-            <span className="text-xs text-stone-400">
-              {dirty ? 'You have unsaved changes' : 'All changes saved'}
-            </span>
-            <Button
-              leftIcon={Save}
-              onPress={save}
-              isPending={saving}
-              isDisabled={!dirty}
-            >
-              Save settings
-            </Button>
-          </div>
         </div>
       )}
     </div>

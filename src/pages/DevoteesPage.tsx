@@ -60,7 +60,7 @@ export function DevoteesPage() {
     sortAccessors,
     initialSortKey: 'registered',
     initialSortDir: 'desc',
-    pageSize: 20,
+    pageSize: 15,
   })
 
   // Selection helpers.

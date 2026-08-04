@@ -83,7 +83,7 @@ export function ChantsPage() {
     sortAccessors,
     initialSortKey: 'chants',
     initialSortDir: 'desc',
-    pageSize: 20,
+    pageSize: 15,
   })
 
   const onSave = async (count: number) => {
@@ -147,10 +147,10 @@ export function ChantsPage() {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
+          <div className="max-h-[60vh] overflow-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
             <table className="w-full min-w-[600px] text-left text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-neutral-900">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 shadow-[0_1px_0_theme(colors.gray.200)] dark:bg-neutral-900 dark:shadow-[0_1px_0_theme(colors.neutral.800)]">
                   <th className="px-4 py-3 font-semibold">#</th>
                   {cols.map(col => {
                     const active = table.sortKey === col.key

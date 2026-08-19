@@ -8,6 +8,8 @@ import { DevoteesPage } from './pages/DevoteesPage'
 import { ChantsPage } from './pages/ChantsPage'
 import { PaymentsPage } from './pages/PaymentsPage'
 import { ReportsPage } from './pages/ReportsPage'
+import { LeaderboardPage } from './pages/LeaderboardPage'
+import { NotificationsPage } from './pages/NotificationsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
@@ -60,6 +62,8 @@ function App() {
               <Route path="devotees" element={<DevoteesPage />} />
               <Route path="chants" element={<ChantsPage />} />
               <Route path="payments" element={<PaymentsPage />} />
+              <Route path="leaderboard" element={<LeaderboardPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
               <Route path="reports" element={<ReportsPage />} />
 
               <Route element={<RequireSuperAdmin />}>

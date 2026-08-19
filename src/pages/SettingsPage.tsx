@@ -14,11 +14,11 @@ import {
   AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
-import type { MissionSettings } from '../types/mission'
+import type { MissionSettings, SettingsMeta } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
 import { Button, useToast } from '../components/ui'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
-import { formatIndianCompact } from '../lib/format'
+import { formatIndianCompact, formatDateTime } from '../lib/format'
 
 /* ── Small building blocks ────────────────────────────────────────────────── */
 
@@ -135,6 +135,7 @@ function compareVersions(a: string, b: string): number {
 
 export function SettingsPage() {
   const [form, setForm] = useState<MissionSettings | null>(null)
+  const [meta, setMeta] = useState<SettingsMeta | null>(null)
   const initialRef = useRef<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -152,6 +153,12 @@ export function SettingsPage() {
       })
       .catch(err => setFeedback({ ok: false, msg: err.message }))
       .finally(() => setLoading(false))
+
+    // Provenance is best-effort: the form still works if it can't be read.
+    missionAdminService
+      .settingsMeta()
+      .then(setMeta)
+      .catch(() => {})
   }, [])
 
   const set = <K extends keyof MissionSettings>(key: K, value: MissionSettings[K]) =>
@@ -175,6 +182,7 @@ export function SettingsPage() {
       await missionAdminService.updateSettings(form)
       initialRef.current = JSON.stringify(form)
       setFeedback({ ok: true, msg: 'Settings saved.' })
+      missionAdminService.settingsMeta().then(setMeta).catch(() => {})
     } catch (err) {
       setFeedback({ ok: false, msg: err instanceof Error ? err.message : 'Save failed.' })
     } finally {
@@ -230,13 +238,26 @@ export function SettingsPage() {
           </div>
         </div>
         {!loading && form && (
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-stone-400 sm:inline">
-              {dirty ? 'Unsaved changes' : 'All changes saved'}
-            </span>
-            <Button leftIcon={Save} onPress={save} isPending={saving} isDisabled={!dirty}>
-              Save settings
-            </Button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-3">
+              <span className="hidden text-xs text-stone-400 sm:inline">
+                {dirty ? 'Unsaved changes' : 'All changes saved'}
+              </span>
+              <Button leftIcon={Save} onPress={save} isPending={saving} isDisabled={!dirty}>
+                Save settings
+              </Button>
+            </div>
+            {/* Who touched these values last — the settings row is a single
+                shared record, so this is the only way to tell. */}
+            {meta?.lastChange && (
+              <p className="text-[11px] text-stone-400">
+                Last changed by{' '}
+                <span className="font-medium text-stone-500 dark:text-stone-300">
+                  {meta.lastChange.actorName ?? 'an admin'}
+                </span>{' '}
+                · {formatDateTime(meta.lastChange.at)}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -378,13 +399,29 @@ export function SettingsPage() {
               value={form.announcement}
               onChange={e => set('announcement', e.target.value)}
             />
+            {/* What the devotee actually sees on the Home screen. */}
+            {form.announcement.trim() && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  Appears in the app as
+                </p>
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+                  <Bell size={16} className="mt-0.5 shrink-0" />
+                  <span className="whitespace-pre-wrap">{form.announcement.trim()}</span>
+                </div>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-stone-400">
+              Devotees see the change on their next app launch. Leave empty for no banner.
+            </p>
+
             <div className="mt-4 flex items-center justify-between rounded-xl border border-stone-200 px-4 py-3 dark:border-neutral-800">
               <div>
                 <div className="text-sm font-medium text-stone-800 dark:text-stone-100">
                   Mission active
                 </div>
                 <div className="text-xs text-stone-400">
-                  When off, the mission is paused for all devotees.
+                  When off, the app pauses chanting and shows a “mission paused” notice.
                 </div>
               </div>
               <Toggle

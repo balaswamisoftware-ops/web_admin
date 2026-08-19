@@ -29,3 +29,46 @@ export function formatDate(iso: string): string {
     year: 'numeric',
   })
 }
+
+/** ISO string -> "2 Jun 2026, 4:05 PM". */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+/** ISO string -> "3 days ago" / "in 2 months". Falls back to a date if far off. */
+export function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return '—'
+  const seconds = Math.round((then - Date.now()) / 1000)
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31536000],
+    ['month', 2592000],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ]
+  const rtf = new Intl.RelativeTimeFormat('en-IN', { numeric: 'auto' })
+  for (const [unit, secondsPerUnit] of units) {
+    if (Math.abs(seconds) >= secondsPerUnit) {
+      return rtf.format(Math.round(seconds / secondsPerUnit), unit)
+    }
+  }
+  return 'just now'
+}
+
+/** 1234567 -> "12,34,567" (Indian digit grouping). */
+export const formatNumber = (n: number) => n.toLocaleString('en-IN')
+
+/** 216 -> "₹216". */
+export const formatInr = (n: number) => `₹${n.toLocaleString('en-IN')}`

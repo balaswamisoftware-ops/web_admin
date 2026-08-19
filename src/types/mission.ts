@@ -22,6 +22,31 @@ export interface Donation {
   adminRemarks: string | null
   createdAt: string
   verifiedAt: string | null
+  /** This UPI reference appears on more than one donation — likely a re-use. */
+  dupTxn: boolean
+  /** Amount differs from the seva amount configured in settings. */
+  amountMismatch: boolean
+  /** The seva amount settings currently expects. */
+  expectedAmount: number
+}
+
+/** Counts per status across ALL donations, for the filter chips. */
+export interface DonationCounts {
+  all: number
+  pending: number
+  verified: number
+  completed: number
+  rejected: number
+  flagged: number
+}
+
+/** One UPI reference used by more than one donation. */
+export interface DuplicateTxn {
+  txnId: string
+  uses: number
+  ids: string[]
+  devotees: string[]
+  statuses: string[]
 }
 
 export interface ChantEntry {
@@ -30,6 +55,92 @@ export interface ChantEntry {
   mobile: string
   count: number
   updatedAt: string
+  /** Position across the whole mission (1 = highest count). */
+  rank: number
+}
+
+/** A point on a daily series returned by `admin_analytics`. */
+export interface DailyPoint {
+  date: string
+  value: number
+}
+
+export interface Analytics {
+  days: number
+  totalChants: number
+  remaining: number
+  dailyChants: DailyPoint[]
+  dailyRegistrations: DailyPoint[]
+  /** Registered -> chanted -> hit personal goal -> donation verified. */
+  funnel: {
+    registered: number
+    chanted: number
+    completed: number
+    donated: number
+  }
+  activity: {
+    today: number
+    week: number
+    month: number
+    activeDevotees7d: number
+    activeDevotees30d: number
+    dormant30d: number
+  }
+  /** Straight-line projection from the last 14 days of chanting. */
+  projection: {
+    avgPerDay: number
+    daysToTarget: number | null
+    targetDate: string | null
+  }
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  userId: string
+  devoteeId: string | null
+  fullName: string
+  mobile: string
+  nakshatram: string
+  count: number
+  malas: number
+  pct: number
+  completed: boolean
+  donationStatus: DonationStatus | null
+  updatedAt: string
+}
+
+export interface MilestoneTier {
+  label: string
+  threshold: number
+  count: number
+}
+
+export interface Completer {
+  devoteeId: string
+  fullName: string
+  mobile: string
+  nakshatram: string
+  gothram: string
+  count: number
+  updatedAt: string
+  donationStatus: DonationStatus | null
+}
+
+export interface Milestones {
+  target: number
+  tiers: MilestoneTier[]
+  completers: Completer[]
+}
+
+/** Who last saved the settings singleton, and when. */
+export interface SettingsMeta {
+  updatedAt: string | null
+  lastChange: {
+    actorName: string | null
+    actorEmail: string | null
+    at: string
+    summary: string | null
+  } | null
 }
 
 export interface MissionSettings {

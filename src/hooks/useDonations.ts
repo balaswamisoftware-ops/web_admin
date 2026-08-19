@@ -1,88 +1,134 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Donation, DonationStatus } from '../types/mission'
+import { useCallback, useEffect, useState } from 'react'
+import type { Donation, DonationCounts, DonationStatus } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
+import { isSupabaseConfigured } from '../config/env'
+import { useServerTable, type ServerTableParams } from './useServerTable'
 
-const ALL = 'all' as const
-type Filter = typeof ALL | DonationStatus
+/** 'flagged' is not a stored status — it means "shares a UPI ref with another". */
+export type DonationFilter = 'all' | DonationStatus | 'flagged'
 
-export function useDonations() {
-  const [donations, setDonations] = useState<Donation[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+const EMPTY_COUNTS: DonationCounts = {
+  all: 0,
+  pending: 0,
+  verified: 0,
+  completed: 0,
+  rejected: 0,
+  flagged: 0,
+}
+
+/**
+ * The payment verification queue.
+ *
+ * Defaults to the 'queue' sort — pending first, duplicate-txn rows ahead of the
+ * rest, oldest first — so opening the page lands the admin on the work that
+ * actually needs a decision.
+ */
+export function useDonations(pageSize = 15) {
+  const [filter, setFilterRaw] = useState<DonationFilter>('all')
+  const [counts, setCounts] = useState<DonationCounts>(EMPTY_COUNTS)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>(ALL)
-  const [query, setQuery] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const fetcher = useCallback(
+    (p: ServerTableParams) =>
+      missionAdminService.listDonationsPage({
+        query: p.query,
+        status: filter,
+        from: p.from,
+        to: p.to,
+        sortKey: p.sortKey,
+        sortDir: p.sortDir,
+        page: p.page,
+        pageSize: p.pageSize,
+      }),
+    [filter],
+  )
+
+  const table = useServerTable<Donation>(fetcher, {
+    initialSortKey: 'queue',
+    initialSortDir: 'asc',
+    pageSize,
+    enabled: isSupabaseConfigured,
+  })
+
+  const { refresh, setPage } = table
+
+  const loadCounts = useCallback(async () => {
+    if (!isSupabaseConfigured) return
     try {
-      setDonations(await missionAdminService.listDonations())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load donations.')
-    } finally {
-      setLoading(false)
+      setCounts(await missionAdminService.donationCounts())
+    } catch {
+      /* the chips just show no numbers */
     }
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadCounts()
+  }, [loadCounts])
+
+  const setFilter = useCallback(
+    (value: DonationFilter) => {
+      setFilterRaw(value)
+      setPage(1)
+    },
+    [setPage],
+  )
+
+  const reload = useCallback(async () => {
+    await Promise.all([refresh(), loadCounts()])
+  }, [refresh, loadCounts])
 
   const update = useCallback(
     async (id: string, status: DonationStatus, remarks: string) => {
       setBusyId(id)
+      setActionError(null)
       try {
         await missionAdminService.updateDonation(id, status, remarks)
-        setDonations(prev =>
-          prev.map(d =>
-            d.id === id
-              ? {
-                  ...d,
-                  status,
-                  adminRemarks: remarks,
-                  verifiedAt:
-                    status === 'verified' || status === 'completed'
-                      ? new Date().toISOString()
-                      : d.verifiedAt,
-                }
-              : d,
-          ),
-        )
+        await reload()
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update donation.')
+        const message =
+          err instanceof Error ? err.message : 'Failed to update donation.'
+        setActionError(message)
+        throw err
       } finally {
         setBusyId(null)
       }
     },
-    [],
+    [reload],
   )
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return donations.filter(d => {
-      const matchesStatus = filter === ALL || d.status === filter
-      const matchesQuery =
-        !q ||
-        d.fullName.toLowerCase().includes(q) ||
-        d.mobile.includes(q) ||
-        (d.upiTxnId ?? '').toLowerCase().includes(q)
-      return matchesStatus && matchesQuery
-    })
-  }, [donations, filter, query])
+  const bulkUpdate = useCallback(
+    async (ids: string[], status: DonationStatus, remarks = '') => {
+      setBulkBusy(true)
+      setActionError(null)
+      try {
+        const n = await missionAdminService.bulkUpdateDonations(ids, status, remarks)
+        await reload()
+        return n
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Bulk update failed.'
+        setActionError(message)
+        throw err
+      } finally {
+        setBulkBusy(false)
+      }
+    },
+    [reload],
+  )
 
   return {
-    donations: filtered,
-    total: donations.length,
-    pending: donations.filter(d => d.status === 'pending').length,
-    loading,
-    error,
-    busyId,
+    ...table,
+    donations: table.rows,
+    error: table.error ?? actionError,
+    counts,
     filter,
     setFilter,
-    query,
-    setQuery,
-    refresh: load,
+    busyId,
+    bulkBusy,
     update,
+    bulkUpdate,
+    refresh: reload,
   }
 }

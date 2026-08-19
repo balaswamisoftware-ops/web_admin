@@ -1,20 +1,29 @@
 import { useState } from 'react'
-import { Flame, Search, RefreshCw, Download, Pencil, X, ArrowUp, ArrowDown } from 'lucide-react'
+import { Flame, Search, RefreshCw, Download, Pencil, X, Trophy } from 'lucide-react'
 import type { ChantEntry } from '../types/mission'
 import { useChants } from '../hooks/useChants'
-import { useTableControls } from '../hooks/useTableControls'
 import { useModalA11y } from '../hooks/useModalA11y'
-import { Input, Button, Pagination, useToast } from '../components/ui'
-import { formatDate } from '../lib/format'
+import { missionAdminService } from '../services/missionAdminService'
+import {
+  Badge,
+  Button,
+  DateRangePicker,
+  Input,
+  Pagination,
+  SortableHeader,
+  useToast,
+  type Column,
+} from '../components/ui'
+import { DevoteeDrawer } from '../components/devotees/DevoteeDrawer'
+import { formatDate, formatNumber } from '../lib/format'
+import { describeRange } from '../lib/dateRange'
 import { exportCsv } from '../lib/exportCsv'
 
-const num = (n: number) => n.toLocaleString('en-IN')
-
-const sortAccessors: Record<string, (c: ChantEntry) => string | number> = {
-  devotee: c => c.fullName.toLowerCase(),
-  chants: c => c.count,
-  updated: c => new Date(c.updatedAt).getTime(),
-}
+const COLUMNS: Column[] = [
+  { key: 'devotee', label: 'Devotee' },
+  { key: 'chants', label: 'Chants', numeric: true },
+  { key: 'updated', label: 'Updated' },
+]
 
 function AdjustDialog({
   entry,
@@ -37,6 +46,9 @@ function AdjustDialog({
     onSave(n)
   }
 
+  const next = parseInt(value, 10)
+  const delta = Number.isFinite(next) ? next - entry.count : 0
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
@@ -48,26 +60,47 @@ function AdjustDialog({
         onClick={e => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Adjust chant count</h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-white">Adjust chant count</h2>
+          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-600">
+            <X size={20} />
+          </button>
         </div>
-        <p className="mb-4 text-sm text-gray-500">{entry.fullName} · {entry.mobile}</p>
+        <p className="mb-4 text-sm text-stone-500">
+          {entry.fullName} · {entry.mobile}
+        </p>
         {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
         <input
           type="number"
           min={0}
           value={value}
           onChange={e => setValue(e.target.value)}
-          className="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
+          className="mb-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white"
         />
+        {/* The devotee sees this delta in their own history, so make it explicit. */}
+        <p className="mb-3 text-xs text-stone-500">
+          Currently {formatNumber(entry.count)}.{' '}
+          {delta === 0
+            ? 'No change.'
+            : `This logs a ${delta > 0 ? '+' : ''}${formatNumber(delta)} ${
+                next === 0 ? 'reset' : 'adjustment'
+              } in their history.`}
+        </p>
         <div className="mb-4 flex gap-2">
-          <button type="button" onClick={() => setValue('0')} className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 dark:bg-neutral-800 dark:text-gray-300">
+          <button
+            type="button"
+            onClick={() => setValue('0')}
+            className="rounded-lg bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-600 dark:bg-neutral-800 dark:text-stone-300"
+          >
             Reset to 0
           </button>
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onPress={onClose} isDisabled={busy}>Cancel</Button>
-          <Button onPress={submit} isPending={busy}>Save</Button>
+          <Button variant="ghost" onPress={onClose} isDisabled={busy}>
+            Cancel
+          </Button>
+          <Button onPress={submit} isPending={busy}>
+            Save
+          </Button>
         </div>
       </div>
     </div>
@@ -75,43 +108,85 @@ function AdjustDialog({
 }
 
 export function ChantsPage() {
-  const { chants, total, contributors, loading, error, busyId, query, setQuery, refresh, setCount } = useChants()
+  const {
+    chants,
+    total,
+    loading,
+    error,
+    busyId,
+    query,
+    setQuery,
+    range,
+    setRange,
+    sortKey,
+    sortDir,
+    toggleSort,
+    page,
+    setPage,
+    pageCount,
+    from,
+    to,
+    params,
+    refresh,
+    setCount,
+  } = useChants()
+
   const toast = useToast()
   const [editing, setEditing] = useState<ChantEntry | null>(null)
-
-  const table = useTableControls(chants, {
-    sortAccessors,
-    initialSortKey: 'chants',
-    initialSortDir: 'desc',
-    pageSize: 15,
-  })
+  const [openDevoteeId, setOpenDevoteeId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const onSave = async (count: number) => {
     if (!editing) return
     try {
       await setCount(editing.userId, count)
-      toast.success(`Set ${editing.fullName}'s count to ${num(count)}.`)
+      toast.success(`Set ${editing.fullName}'s count to ${formatNumber(count)}.`)
       setEditing(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to update count.')
     }
   }
 
-  const doExport = () => {
-    exportCsv('chant-report', chants, [
-      { header: 'Devotee', value: c => c.fullName },
-      { header: 'Mobile', value: c => c.mobile },
-      { header: 'Chants', value: c => c.count },
-      { header: 'Last updated', value: c => formatDate(c.updatedAt) },
-    ])
-    toast.success(`Exported ${chants.length} record(s).`)
+  const openDevotee = async (userId: string) => {
+    try {
+      const id = await missionAdminService.devoteeIdForUser(userId)
+      if (!id) {
+        toast.error('No devotee profile is linked to this chant record.')
+        return
+      }
+      setOpenDevoteeId(id)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not open the devotee.')
+    }
   }
 
-  const cols: { key: string; label: string }[] = [
-    { key: 'devotee', label: 'Devotee' },
-    { key: 'chants', label: 'Chants' },
-    { key: 'updated', label: 'Updated' },
-  ]
+  const doExport = async () => {
+    setExporting(true)
+    try {
+      const { rows } = await missionAdminService.listChantsPage({
+        query: params.query,
+        from: params.from,
+        to: params.to,
+        sortKey,
+        sortDir,
+        page: 1,
+        pageSize: 10000,
+      })
+      exportCsv('chant-report', rows, [
+        { header: 'Rank', value: c => c.rank },
+        { header: 'Devotee', value: c => c.fullName },
+        { header: 'Mobile', value: c => c.mobile },
+        { header: 'Chants', value: c => c.count },
+        { header: 'Malas', value: c => Math.floor(c.count / 108) },
+        { header: 'Last updated', value: c => formatDate(c.updatedAt) },
+      ])
+      toast.success(`Exported ${rows.length} record(s).`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -121,67 +196,108 @@ export function ChantsPage() {
             <Flame size={22} />
           </span>
           <div>
-            <div className="text-xl font-bold text-gray-900 dark:text-white">Chant Management</div>
-            <div className="text-sm text-gray-500">
-              {loading ? 'Loading…' : `${num(total)} total chants · ${contributors} contributors`}
+            <div className="text-xl font-bold text-stone-900 dark:text-white">
+              Chant Management
+            </div>
+            <div className="text-sm text-stone-500">
+              {loading
+                ? 'Loading…'
+                : `${formatNumber(total)} contributors · ${describeRange(range)}`}
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" leftIcon={Download} onPress={doExport}>Export</Button>
-          <Button variant="secondary" leftIcon={RefreshCw} onPress={refresh}>Refresh</Button>
+          <Button variant="secondary" leftIcon={Download} isPending={exporting} onPress={doExport}>
+            Export
+          </Button>
+          <Button variant="secondary" leftIcon={RefreshCw} onPress={refresh}>
+            Refresh
+          </Button>
         </div>
       </div>
 
-      <div className="mb-4 max-w-md">
-        <Input label="Search" icon={Search} placeholder="Name or mobile" value={query} onChange={setQuery} />
+      <div className="mb-3 max-w-md">
+        <Input
+          label="Search"
+          icon={Search}
+          placeholder="Name or mobile"
+          value={query}
+          onChange={setQuery}
+        />
       </div>
 
-      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+      <DateRangePicker
+        value={range}
+        onChange={setRange}
+        label="chant activity"
+        className="mb-4"
+      />
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <div className="py-20 text-center text-gray-400">Loading chants…</div>
+        <div className="py-20 text-center text-stone-400">Loading chants…</div>
       ) : chants.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 py-16 text-center text-gray-400 dark:border-neutral-700">
-          No chant records yet.
+        <div className="rounded-2xl border border-dashed border-stone-300 py-16 text-center text-stone-400 dark:border-neutral-700">
+          No chant records match these filters.
         </div>
       ) : (
         <>
-          <div className="max-h-[60vh] overflow-auto rounded-2xl border border-gray-200 dark:border-neutral-800">
-            <table className="w-full min-w-[600px] text-left text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 shadow-[0_1px_0_theme(colors.gray.200)] dark:bg-neutral-900 dark:shadow-[0_1px_0_theme(colors.neutral.800)]">
-                  <th className="px-4 py-3 font-semibold">#</th>
-                  {cols.map(col => {
-                    const active = table.sortKey === col.key
-                    return (
-                      <th key={col.key} className={`px-4 py-3 font-semibold ${col.key === 'devotee' ? '' : ''}`}>
-                        <button
-                          type="button"
-                          onClick={() => table.toggleSort(col.key)}
-                          className="inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-gray-200"
-                        >
-                          {col.label}
-                          {active && (table.sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </button>
-                      </th>
-                    )
-                  })}
-                  <th className="px-4 py-3 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
+          <div className="max-h-[60vh] overflow-auto rounded-2xl border border-stone-200 dark:border-neutral-800">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <SortableHeader
+                columns={COLUMNS}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+                leading={<th className="w-16 px-4 py-3 font-semibold">Rank</th>}
+              >
+                <th className="px-4 py-3 text-right font-semibold">Action</th>
+              </SortableHeader>
               <tbody>
-                {table.pageRows.map((c, i) => (
-                  <tr key={c.userId} className="border-t border-gray-100 hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50">
-                    <td className="px-4 py-3 text-gray-400">{table.from + i}</td>
+                {chants.map(c => (
+                  <tr
+                    key={c.userId}
+                    className="border-t border-stone-100 transition-colors hover:bg-stone-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50"
+                  >
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-white">{c.fullName}</div>
-                      <div className="text-xs text-gray-400">{c.mobile}</div>
+                      {c.rank <= 3 ? (
+                        <Badge tone="warning">
+                          <Trophy size={11} /> {c.rank}
+                        </Badge>
+                      ) : (
+                        <span className="text-stone-400">#{c.rank}</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">{num(c.count)}</td>
-                    <td className="px-4 py-3 text-gray-500">{formatDate(c.updatedAt)}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => openDevotee(c.userId)}
+                        className="text-left font-medium text-stone-900 hover:text-brand-600 hover:underline dark:text-white dark:hover:text-brand-300"
+                      >
+                        {c.fullName}
+                      </button>
+                      <div className="text-xs text-stone-400">{c.mobile}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-stone-900 dark:text-white">
+                      {formatNumber(c.count)}
+                      <div className="text-[11px] font-normal text-stone-400">
+                        {formatNumber(Math.floor(c.count / 108))} malas
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-stone-500">{formatDate(c.updatedAt)}</td>
                     <td className="px-4 py-3 text-right">
-                      <Button size="sm" variant="ghost" leftIcon={Pencil} isPending={busyId === c.userId} onPress={() => setEditing(c)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leftIcon={Pencil}
+                        isPending={busyId === c.userId}
+                        onPress={() => setEditing(c)}
+                      >
                         Adjust
                       </Button>
                     </td>
@@ -191,20 +307,31 @@ export function ChantsPage() {
             </table>
           </div>
           <Pagination
-            page={table.page}
-            pageCount={table.pageCount}
-            from={table.from}
-            to={table.to}
-            total={table.total}
-            onPage={table.setPage}
+            page={page}
+            pageCount={pageCount}
+            from={from}
+            to={to}
+            total={total}
+            onPage={setPage}
             label="devotees"
           />
         </>
       )}
 
       {editing && (
-        <AdjustDialog entry={editing} busy={busyId === editing.userId} onClose={() => setEditing(null)} onSave={onSave} />
+        <AdjustDialog
+          entry={editing}
+          busy={busyId === editing.userId}
+          onClose={() => setEditing(null)}
+          onSave={onSave}
+        />
       )}
+
+      <DevoteeDrawer
+        devoteeId={openDevoteeId}
+        onClose={() => setOpenDevoteeId(null)}
+        onChanged={refresh}
+      />
     </div>
   )
 }

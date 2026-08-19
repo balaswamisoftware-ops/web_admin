@@ -1,18 +1,34 @@
-import { useMemo } from 'react'
-import { Users, Flame, Target, HandCoins, Clock, CalendarDays, AlertCircle, TrendingUp } from 'lucide-react'
-import { useDevotees } from '../hooks/useDevotees'
+import { useEffect, useState } from 'react'
+import {
+  Users,
+  Flame,
+  Target,
+  HandCoins,
+  Clock,
+  AlertCircle,
+  TrendingUp,
+  Activity,
+  CalendarClock,
+  UserCheck,
+  Filter,
+} from 'lucide-react'
+import type { Devotee } from '../types/devotee'
+import { devoteesService } from '../services/devoteesService'
 import { useDashboardStats } from '../hooks/useDashboardStats'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { useAdminAuth } from '../auth/AdminAuthProvider'
-import { formatDate, formatMobile, formatIndianCompact } from '../lib/format'
-import { StatCard } from '../components/ui/StatCard'
-import { BarChart } from '../components/ui/BarChart'
+import {
+  formatDate,
+  formatInr,
+  formatMobile,
+  formatIndianCompact,
+  formatNumber,
+} from '../lib/format'
+import { StatCard, LineChart } from '../components/ui'
 import {
   COMMUNITY_CHANT_TARGET,
   PERSONAL_CHANT_TARGET,
 } from '../constants/mission'
-
-const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`
-const num = (n: number) => n.toLocaleString('en-IN')
 
 function greeting() {
   const h = new Date().getHours()
@@ -28,53 +44,92 @@ const today = new Date().toLocaleDateString('en-IN', {
   year: 'numeric',
 })
 
+/** Registered → chanted → goal reached → donated, each stage as a share bar. */
+function Funnel({
+  stages,
+}: {
+  stages: { label: string; value: number; tint: string }[]
+}) {
+  const top = Math.max(1, stages[0]?.value ?? 1)
+  return (
+    <div className="space-y-3">
+      {stages.map(stage => {
+        const pct = (stage.value / top) * 100
+        return (
+          <div key={stage.label}>
+            <div className="mb-1 flex items-baseline justify-between text-sm">
+              <span className="font-medium text-stone-700 dark:text-stone-200">
+                {stage.label}
+              </span>
+              <span className="text-stone-500">
+                <strong className="text-stone-900 dark:text-white">
+                  {formatNumber(stage.value)}
+                </strong>{' '}
+                <span className="text-xs">({pct.toFixed(0)}%)</span>
+              </span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-stone-100 dark:bg-white/10">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${stage.tint}`}
+                style={{ width: `${Math.max(pct, 1)}%` }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function DashboardPage() {
-  const { devotees, total, loading, error: devError } = useDevotees()
   const { stats, loading: statsLoading, error: statsError } = useDashboardStats()
+  const { analytics, loading: analyticsLoading, error: analyticsError } = useAnalytics(30)
   const { admin } = useAdminAuth()
-  const loadError = devError || statsError
+
+  const [recent, setRecent] = useState<Devotee[]>([])
+  const [recentLoading, setRecentLoading] = useState(true)
+  const [recentError, setRecentError] = useState<string | null>(null)
+
+  // The "latest 5" list is its own tiny query now that the page no longer holds
+  // the full devotee table in memory.
+  useEffect(() => {
+    let active = true
+    devoteesService
+      .page({ sortKey: 'registered', sortDir: 'desc', page: 1, pageSize: 5 })
+      .then(res => active && setRecent(res.rows))
+      .catch(
+        e =>
+          active &&
+          setRecentError(e instanceof Error ? e.message : 'Failed to load devotees.'),
+      )
+      .finally(() => active && setRecentLoading(false))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const loadError = statsError || analyticsError || recentError
   const firstName = admin?.fullName?.split(' ')[0] ?? 'Admin'
 
-  const thisMonth = useMemo(() => {
-    const now = new Date()
-    return devotees.filter(d => {
-      const c = new Date(d.createdAt)
-      return c.getMonth() === now.getMonth() && c.getFullYear() === now.getFullYear()
-    }).length
-  }, [devotees])
-
-  const recent = useMemo(() => devotees.slice(0, 5), [devotees])
-
-  // New registrations over the last 6 months, for the trend chart.
-  const monthlyRegs = useMemo(() => {
-    const now = new Date()
-    const buckets = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-      return {
-        key: `${d.getFullYear()}-${d.getMonth()}`,
-        label: d.toLocaleString('en-IN', { month: 'short' }),
-        value: 0,
-      }
-    })
-    const idx = new Map(buckets.map((b, i) => [b.key, i]))
-    devotees.forEach(dev => {
-      const c = new Date(dev.createdAt)
-      const i = idx.get(`${c.getFullYear()}-${c.getMonth()}`)
-      if (i != null) buckets[i].value++
-    })
-    return buckets
-  }, [devotees])
-
   const s = <T,>(v: T) => (statsLoading || !stats ? '—' : v)
+  const a = <T,>(v: T) => (analyticsLoading || !analytics ? '—' : v)
 
   // Community achievement: total chants across ALL devotees vs the 11 Cr goal.
   const totalChants = stats?.totalChants ?? 0
   const pct = Math.min(100, (totalChants / COMMUNITY_CHANT_TARGET) * 100)
   const communityRemaining = Math.max(0, COMMUNITY_CHANT_TARGET - totalChants)
-  // Per-devotee personal goal (defaults to 1 Lakh; may be overridden in settings).
-  const personalTarget = stats?.target && stats.target > 0
-    ? stats.target
-    : PERSONAL_CHANT_TARGET
+  const personalTarget =
+    stats?.target && stats.target > 0 ? stats.target : PERSONAL_CHANT_TARGET
+
+  const projection = analytics?.projection
+  const projectedLabel = projection?.targetDate
+    ? formatDate(projection.targetDate)
+    : projection && projection.avgPerDay > 0
+      ? 'Beyond 100 years'
+      : 'No recent activity'
+
+  const registrations30d =
+    analytics?.dailyRegistrations.reduce((sum, d) => sum + d.value, 0) ?? 0
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -104,7 +159,7 @@ export function DashboardPage() {
           </div>
 
           {/* Community mission progress (all devotees vs 11 Cr) */}
-          <div className="min-w-[240px] rounded-2xl bg-white/15 p-4 backdrop-blur-md ring-1 ring-white/20">
+          <div className="min-w-[240px] rounded-2xl bg-white/15 p-4 ring-1 ring-white/20 backdrop-blur-md">
             <div className="flex items-center justify-between text-xs font-medium text-white/80">
               <span>Community goal · {formatIndianCompact(COMMUNITY_CHANT_TARGET)}</span>
               <span>{pct.toFixed(2)}%</span>
@@ -117,9 +172,14 @@ export function DashboardPage() {
             </div>
             <div className="mt-2 text-xs text-white/80">
               {stats
-                ? `${num(totalChants)} of ${num(COMMUNITY_CHANT_TARGET)} chants`
+                ? `${formatNumber(totalChants)} of ${formatNumber(COMMUNITY_CHANT_TARGET)} chants`
                 : 'Loading…'}
             </div>
+            {projection && (
+              <div className="mt-2 border-t border-white/20 pt-2 text-xs text-white/80">
+                At {formatNumber(projection.avgPerDay)}/day → <strong>{projectedLabel}</strong>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -136,28 +196,34 @@ export function DashboardPage() {
         <StatCard
           icon={Users}
           label="Registered devotees"
-          value={loading ? '—' : total}
+          value={s(formatNumber(stats?.totalDevotees ?? 0))}
           tint="bg-brand-100 text-brand-700"
-          hint={loading ? undefined : `${thisMonth} this month`}
+          hint={
+            analyticsLoading ? undefined : `${formatNumber(registrations30d)} in 30 days`
+          }
         />
         <StatCard
           icon={Flame}
           label="Total chants"
-          value={s(num(totalChants))}
+          value={s(formatNumber(totalChants))}
           tint="bg-rose-100 text-rose-700"
-          hint={stats ? `${pct.toFixed(2)}% of ${formatIndianCompact(COMMUNITY_CHANT_TARGET)}` : undefined}
+          hint={
+            stats
+              ? `${pct.toFixed(2)}% of ${formatIndianCompact(COMMUNITY_CHANT_TARGET)}`
+              : undefined
+          }
         />
         <StatCard
           icon={Target}
           label="Remaining to 11 Cr"
-          value={s(num(communityRemaining))}
+          value={s(formatNumber(communityRemaining))}
           tint="bg-amber-100 text-amber-700"
           hint={stats ? `Goal: ${formatIndianCompact(COMMUNITY_CHANT_TARGET)}` : undefined}
         />
         <StatCard
           icon={HandCoins}
           label="Donations received"
-          value={s(inr(stats?.totalDonations ?? 0))}
+          value={s(formatInr(stats?.totalDonations ?? 0))}
           tint="bg-emerald-100 text-emerald-700"
           hint={stats ? `${stats.verifiedDonations} verified` : undefined}
         />
@@ -167,80 +233,187 @@ export function DashboardPage() {
         <StatCard
           icon={Clock}
           label="Pending verifications"
-          value={s(num(stats?.pendingVerifications ?? 0))}
+          value={s(formatNumber(stats?.pendingVerifications ?? 0))}
           tint="bg-yellow-100 text-yellow-700"
         />
         <StatCard
-          icon={CalendarDays}
-          label="Joined this month"
-          value={loading ? '—' : thisMonth}
+          icon={Activity}
+          label="Chants today"
+          value={a(formatNumber(analytics?.activity.today ?? 0))}
           tint="bg-sky-100 text-sky-700"
+          hint={
+            analytics ? `${formatNumber(analytics.activity.week)} this week` : undefined
+          }
+        />
+        <StatCard
+          icon={UserCheck}
+          label="Active devotees"
+          value={a(formatNumber(analytics?.activity.activeDevotees30d ?? 0))}
+          tint="bg-violet-100 text-violet-700"
+          hint={
+            analytics
+              ? `${formatNumber(analytics.activity.activeDevotees7d)} this week`
+              : undefined
+          }
+        />
+        <StatCard
+          icon={CalendarClock}
+          label="Projected 11 Cr date"
+          value={a(projectedLabel)}
+          tint="bg-teal-100 text-teal-700"
+          hint={
+            analytics && projection?.daysToTarget != null
+              ? `${formatNumber(projection.daysToTarget)} days at today’s pace`
+              : undefined
+          }
         />
       </div>
 
-      {/* Registrations trend */}
-      <div className="mt-8 rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
-        <div className="mb-4 flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-            <TrendingUp size={16} />
-          </span>
-          <div>
-            <h2 className="text-base font-semibold text-stone-900 dark:text-white">
-              New registrations
-            </h2>
-            <p className="text-xs text-stone-400">Devotees joined per month · last 6 months</p>
+      {/* Velocity */}
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+              <Flame size={16} />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-stone-900 dark:text-white">
+                Chant velocity
+              </h2>
+              <p className="text-xs text-stone-400">Chants logged per day · last 30 days</p>
+            </div>
           </div>
+          {analyticsLoading ? (
+            <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
+          ) : (
+            <LineChart
+              data={analytics?.dailyChants ?? []}
+              className="text-rose-500"
+              format={formatNumber}
+            />
+          )}
         </div>
-        {loading ? (
-          <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
-        ) : (
-          <BarChart data={monthlyRegs} />
-        )}
+
+        <div className="rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+              <TrendingUp size={16} />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-stone-900 dark:text-white">
+                New registrations
+              </h2>
+              <p className="text-xs text-stone-400">Devotees joined per day · last 30 days</p>
+            </div>
+          </div>
+          {analyticsLoading ? (
+            <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
+          ) : (
+            <LineChart
+              data={analytics?.dailyRegistrations ?? []}
+              className="text-brand-500"
+              format={formatNumber}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Recent registrations */}
-      <div className="mt-6 overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
-        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-white/10">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-              <Users size={16} />
+      {/* Funnel + recent */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <Filter size={16} />
             </span>
-            <h2 className="text-base font-semibold text-stone-900 dark:text-white">
-              Recent registrations
-            </h2>
+            <div>
+              <h2 className="text-base font-semibold text-stone-900 dark:text-white">
+                Devotee journey
+              </h2>
+              <p className="text-xs text-stone-400">
+                Registered → chanting → goal reached → seva donated
+              </p>
+            </div>
           </div>
-          <span className="text-xs font-medium text-stone-400">Latest 5</span>
+          {analyticsLoading || !analytics ? (
+            <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
+          ) : (
+            <>
+              <Funnel
+                stages={[
+                  {
+                    label: 'Registered',
+                    value: analytics.funnel.registered,
+                    tint: 'bg-brand-500',
+                  },
+                  {
+                    label: 'Started chanting',
+                    value: analytics.funnel.chanted,
+                    tint: 'bg-rose-500',
+                  },
+                  {
+                    label: 'Reached personal goal',
+                    value: analytics.funnel.completed,
+                    tint: 'bg-amber-500',
+                  },
+                  {
+                    label: 'Seva donated',
+                    value: analytics.funnel.donated,
+                    tint: 'bg-emerald-500',
+                  },
+                ]}
+              />
+              <p className="mt-4 rounded-xl bg-stone-50 px-3 py-2 text-xs text-stone-500 dark:bg-white/5">
+                {formatNumber(analytics.activity.dormant30d)} devotee(s) haven’t chanted
+                in 30 days — a broadcast is the fastest way to reach them.
+              </p>
+            </>
+          )}
         </div>
 
-        {loading ? (
-          <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
-        ) : recent.length === 0 ? (
-          <p className="py-10 text-center text-sm text-stone-400">No devotees yet.</p>
-        ) : (
-          <ul className="divide-y divide-stone-100 dark:divide-white/5">
-            {recent.map(d => (
-              <li
-                key={d.id}
-                className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-brand-50/40 dark:hover:bg-white/5"
-              >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-bold text-brand-700 ring-1 ring-brand-500/10">
-                  {d.fullName.charAt(0).toUpperCase()}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-stone-900 dark:text-white">
-                    {d.fullName}
+        {/* Recent registrations */}
+        <div className="overflow-hidden rounded-2xl border border-stone-200/70 bg-white/80 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/70">
+          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4 dark:border-white/10">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+                <Users size={16} />
+              </span>
+              <h2 className="text-base font-semibold text-stone-900 dark:text-white">
+                Recent registrations
+              </h2>
+            </div>
+            <span className="text-xs font-medium text-stone-400">Latest 5</span>
+          </div>
+
+          {recentLoading ? (
+            <p className="py-10 text-center text-sm text-stone-400">Loading…</p>
+          ) : recent.length === 0 ? (
+            <p className="py-10 text-center text-sm text-stone-400">No devotees yet.</p>
+          ) : (
+            <ul className="divide-y divide-stone-100 dark:divide-white/5">
+              {recent.map(d => (
+                <li
+                  key={d.id}
+                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-brand-50/40 dark:hover:bg-white/5"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-bold text-brand-700 ring-1 ring-brand-500/10">
+                    {d.fullName.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-stone-900 dark:text-white">
+                      {d.fullName}
+                    </div>
+                    <div className="text-xs text-stone-400">
+                      {formatMobile(d.mobile)} · {d.nakshatram}
+                    </div>
                   </div>
-                  <div className="text-xs text-stone-400">
-                    {formatMobile(d.mobile)} · {d.nakshatram}
+                  <div className="text-xs font-medium text-stone-400">
+                    {formatDate(d.createdAt)}
                   </div>
-                </div>
-                <div className="text-xs font-medium text-stone-400">
-                  {formatDate(d.createdAt)}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   )

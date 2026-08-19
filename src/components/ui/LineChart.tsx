@@ -13,6 +13,8 @@ interface LineChartProps {
   format?: (n: number) => string
   /** Tailwind text-color class the line/fill derive from. */
   className?: string
+  /** Set false to paint the final state immediately (e.g. for printing). */
+  animate?: boolean
 }
 
 // Fixed viewBox; the SVG scales to its container so no resize observer is needed.
@@ -30,15 +32,26 @@ const shortDate = (iso: string) => {
  * Dependency-free area/line chart for a daily series. Hovering snaps to the
  * nearest point and shows an inline readout — enough to answer "which day did
  * chanting spike?" without pulling in a charting library.
+ *
+ * On mount (and whenever the series changes) the line draws itself left to
+ * right and the fill rises behind it. The reveal uses `pathLength="1"`, so the
+ * dash maths is independent of the actual path geometry — no `getTotalLength()`
+ * measuring pass, and no reflow.
  */
 export function LineChart({
   data,
   height = 180,
   format = n => n.toLocaleString('en-IN'),
   className = 'text-brand-500',
+  animate = true,
 }: LineChartProps) {
-  const gradientId = useId()
+  const rawId = useId()
   const [hover, setHover] = useState<number | null>(null)
+
+  // useId returns ":r1:" — colons are illegal in CSS identifiers.
+  const uid = rawId.replace(/[^a-zA-Z0-9]/g, '')
+  const gradientId = `grad-${uid}`
+  const scope = `chart-${uid}`
 
   const { points, max, path, area } = useMemo(() => {
     const values = data.map(d => d.value)
@@ -66,6 +79,34 @@ export function LineChart({
     return { points: pts, max: maxValue, path: line, area: fill }
   }, [data])
 
+  // Scoped so two charts on one page never share keyframes, and so
+  // prefers-reduced-motion can flatten this instance to its final state.
+  const css = useMemo(
+    () => `
+      @keyframes ${scope}-draw { from { stroke-dashoffset: 1 } to { stroke-dashoffset: 0 } }
+      @keyframes ${scope}-rise {
+        from { opacity: 0; transform: translateY(8px) }
+        to   { opacity: 1; transform: none }
+      }
+      @keyframes ${scope}-pop {
+        from { opacity: 0; transform: scale(.4) }
+        to   { opacity: 1; transform: none }
+      }
+      .${scope}-line { stroke-dasharray: 1; animation: ${scope}-draw 1100ms cubic-bezier(.22,.61,.36,1) forwards }
+      .${scope}-area { transform-origin: bottom; animation: ${scope}-rise 800ms cubic-bezier(.22,.61,.36,1) 150ms both }
+      .${scope}-dot  { transform-box: fill-box; transform-origin: center; animation: ${scope}-pop 160ms cubic-bezier(.34,1.56,.64,1) both }
+      @media (prefers-reduced-motion: reduce) {
+        .${scope}-line, .${scope}-area, .${scope}-dot {
+          animation: none !important;
+          stroke-dashoffset: 0 !important;
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      }
+    `,
+    [scope],
+  )
+
   if (data.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-stone-400">No activity yet.</p>
@@ -77,11 +118,13 @@ export function LineChart({
 
   return (
     <div className={className}>
+      {animate && <style>{css}</style>}
+
       <div className="mb-2 flex items-baseline justify-between text-xs">
         <span className="font-medium text-stone-500">
           {active ? shortDate(active.date) : `${data.length} days`}
         </span>
-        <span className="font-semibold text-stone-800 dark:text-stone-100">
+        <span className="font-semibold tabular-nums text-stone-800 dark:text-stone-100">
           {active ? format(active.value) : format(total)}
           <span className="ml-1 font-normal text-stone-400">
             {active ? '' : 'total'}
@@ -123,15 +166,26 @@ export function LineChart({
           vectorEffect="non-scaling-stroke"
         />
 
-        <path d={area} fill={`url(#${gradientId})`} />
+        {/* `key` is the path itself: when the series changes React remounts
+            these nodes, which restarts the CSS animation. Hovering doesn't
+            change the path, so it never re-triggers mid-read. */}
         <path
+          key={`area-${area}`}
+          d={area}
+          fill={`url(#${gradientId})`}
+          className={animate ? `${scope}-area` : undefined}
+        />
+        <path
+          key={`line-${path}`}
           d={path}
+          pathLength={1}
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
+          className={animate ? `${scope}-line` : undefined}
         />
 
         {active && (
@@ -147,6 +201,7 @@ export function LineChart({
               vectorEffect="non-scaling-stroke"
             />
             <circle
+              key={`dot-${hover}`}
               cx={active.x}
               cy={active.y}
               r="4"
@@ -154,6 +209,7 @@ export function LineChart({
               stroke="white"
               strokeWidth="2"
               vectorEffect="non-scaling-stroke"
+              className={animate ? `${scope}-dot` : undefined}
             />
           </>
         )}

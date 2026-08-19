@@ -44,7 +44,19 @@ const today = new Date().toLocaleDateString('en-IN', {
   year: 'numeric',
 })
 
-/** Registered → chanted → goal reached → donated, each stage as a share bar. */
+/**
+ * Registered → chanted → goal reached → donated, each stage as a share bar.
+ * Bars grow from zero on mount, staggered top to bottom, so the drop-off
+ * between stages reads as a movement rather than four static widths.
+ */
+const FUNNEL_CSS = `
+  @keyframes funnel-grow { from { width: 0 } to { width: var(--target-w) } }
+  .funnel-bar { width: var(--target-w); animation: funnel-grow 850ms cubic-bezier(.22,.61,.36,1) both }
+  @media (prefers-reduced-motion: reduce) {
+    .funnel-bar { animation: none }
+  }
+`
+
 function Funnel({
   stages,
 }: {
@@ -53,7 +65,8 @@ function Funnel({
   const top = Math.max(1, stages[0]?.value ?? 1)
   return (
     <div className="space-y-3">
-      {stages.map(stage => {
+      <style>{FUNNEL_CSS}</style>
+      {stages.map((stage, i) => {
         const pct = (stage.value / top) * 100
         return (
           <div key={stage.label}>
@@ -70,8 +83,13 @@ function Funnel({
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-stone-100 dark:bg-white/10">
               <div
-                className={`h-full rounded-full transition-all duration-700 ${stage.tint}`}
-                style={{ width: `${Math.max(pct, 1)}%` }}
+                className={`funnel-bar h-full rounded-full ${stage.tint}`}
+                style={
+                  {
+                    '--target-w': `${Math.max(pct, 1)}%`,
+                    animationDelay: `${i * 90}ms`,
+                  } as React.CSSProperties
+                }
               />
             </div>
           </div>

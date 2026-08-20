@@ -151,6 +151,12 @@ export interface MissionSettings {
   qrUrl: string
   announcement: string
   missionActive: boolean
+  /**
+   * Per-submission chant cap. When disabled the devotee may enter any amount
+   * they wish; when enabled they can submit at most `chantLimitMax` at a time.
+   */
+  chantLimitEnabled: boolean
+  chantLimitMax: number
   /** Latest published app version — below this, devotees see an optional update prompt. */
   latestVersion: string
   /** Minimum supported app version — below this, the app forces an update. */

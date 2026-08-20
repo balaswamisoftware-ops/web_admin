@@ -309,6 +309,72 @@ export function SettingsPage() {
                 />
               </Field>
             </div>
+
+            {/* Per-submission input cap. Off = the devotee types whatever they
+                like; on = they can submit at most the number set here. */}
+            <div className="mt-5 rounded-xl border border-stone-200 p-4 dark:border-neutral-800">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-stone-800 dark:text-stone-100">
+                    Limit chants per submission
+                  </div>
+                  <div className="text-xs text-stone-400">
+                    {form.chantLimitEnabled
+                      ? 'Devotees can add at most the amount set below in one go.'
+                      : 'Off — devotees can enter any amount they wish.'}
+                  </div>
+                </div>
+                <Toggle
+                  checked={form.chantLimitEnabled}
+                  onChange={v => set('chantLimitEnabled', v)}
+                />
+              </div>
+
+              {form.chantLimitEnabled && (
+                <div className="mt-4">
+                  <Field
+                    label="Maximum per submission"
+                    hint={
+                      form.chantLimitMax >= 1
+                        ? `A devotee can add up to ${form.chantLimitMax.toLocaleString('en-IN')} chants at a time (${Math.floor(form.chantLimitMax / 108).toLocaleString('en-IN')} malas).`
+                        : 'Must be at least 1.'
+                    }
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      className={inputCls}
+                      value={form.chantLimitMax}
+                      onChange={e =>
+                        set('chantLimitMax', parseInt(e.target.value, 10) || 0)
+                      }
+                    />
+                  </Field>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[108, 216, 1008, 5000].map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => set('chantLimitMax', preset)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                          form.chantLimitMax === preset
+                            ? 'bg-brand-100 text-brand-700 dark:bg-brand-950/50 dark:text-brand-200'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-neutral-800 dark:text-stone-300'
+                        }`}
+                      >
+                        {preset.toLocaleString('en-IN')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="mt-3 text-xs text-stone-400">
+                Enforced on the server too, so the cap holds even outside the app.
+                The mala counter is unaffected — every bead tapped is still counted,
+                just synced in batches of this size.
+              </p>
+            </div>
           </Section>
 
           {/* Donations & payments */}

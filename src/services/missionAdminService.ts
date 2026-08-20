@@ -268,7 +268,7 @@ export const missionAdminService = {
     const { data, error } = await client()
       .from('settings')
       .select(
-        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title',
+        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title',
       )
       .eq('id', 1)
       .single()
@@ -281,6 +281,8 @@ export const missionAdminService = {
       qrUrl: data.qr_url ?? '',
       announcement: data.announcement ?? '',
       missionActive: data.mission_active ?? true,
+      chantLimitEnabled: data.chant_limit_enabled ?? true,
+      chantLimitMax: data.chant_limit_max ?? 5000,
       latestVersion: data.latest_version ?? '1.0.0',
       minVersion: data.min_version ?? '1.0.0',
       updateUrl: data.update_url ?? '',
@@ -324,6 +326,10 @@ export const missionAdminService = {
     if (patch.qrUrl !== undefined) row.qr_url = patch.qrUrl
     if (patch.announcement !== undefined) row.announcement = patch.announcement
     if (patch.missionActive !== undefined) row.mission_active = patch.missionActive
+    if (patch.chantLimitEnabled !== undefined)
+      row.chant_limit_enabled = patch.chantLimitEnabled
+    if (patch.chantLimitMax !== undefined)
+      row.chant_limit_max = Math.max(1, Math.floor(patch.chantLimitMax))
     if (patch.latestVersion !== undefined) row.latest_version = patch.latestVersion.trim()
     if (patch.minVersion !== undefined) row.min_version = patch.minVersion.trim()
     if (patch.updateUrl !== undefined) row.update_url = patch.updateUrl.trim()

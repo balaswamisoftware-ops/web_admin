@@ -20,6 +20,24 @@ import { Button, useToast } from '../components/ui'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
 import { formatIndianCompact, formatDateTime } from '../lib/format'
 
+/* ── Devotional audio ─────────────────────────────────────────── */
+
+const AUDIO_EXTS = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'weba', 'mp4']
+
+/**
+ * Windows builds the picker's filter list from its own registry MIME map, so a
+ * bare `audio/*` can hide .mp3 when another app owns the association. Listing
+ * the extensions alongside it keeps every clip selectable.
+ */
+const AUDIO_ACCEPT = ['audio/*', ...AUDIO_EXTS.map(e => `.${e}`)].join(',')
+
+/** Browsers sometimes report an empty MIME type — fall back to the extension. */
+function isAudioFile(file: File) {
+  if (file.type.startsWith('audio/')) return true
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  return AUDIO_EXTS.includes(ext)
+}
+
 /* ── Small building blocks ────────────────────────────────────────────────── */
 
 const inputCls =
@@ -194,8 +212,8 @@ export function SettingsPage() {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-selecting the same file later
     if (!file) return
-    if (!file.type.startsWith('audio/')) {
-      toast.error('Please choose an audio file.')
+    if (!isAudioFile(file)) {
+      toast.error('Please choose an audio file (MP3, M4A, WAV, OGG…).')
       return
     }
     if (file.size > 20 * 1024 * 1024) {
@@ -671,7 +689,7 @@ export function SettingsPage() {
               <input
                 ref={audioInputRef}
                 type="file"
-                accept="audio/*"
+                accept={AUDIO_ACCEPT}
                 className="hidden"
                 onChange={onAudioFile}
               />

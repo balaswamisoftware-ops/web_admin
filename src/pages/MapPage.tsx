@@ -48,6 +48,11 @@ export function MapPage() {
     controls.autoRotate = true
     controls.autoRotateSpeed = 0.5
     controls.enableZoom = true
+    // Clamp zoom so scrolling can't push the camera inside/through the globe
+    // (radius is 100) or fling it off to infinity.
+    controls.minDistance = 160
+    controls.maxDistance = 500
+    controls.zoomSpeed = 0.6
     g.pointOfView({ lat: 20, lng: 78, altitude: 2.6 }, 0)
   }, [loading])
 

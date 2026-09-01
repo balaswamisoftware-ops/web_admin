@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { ToastProvider } from './components/ui'
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthProvider'
@@ -10,6 +11,8 @@ import { PaymentsPage } from './pages/PaymentsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { LeaderboardPage } from './pages/LeaderboardPage'
 import { NotificationsPage } from './pages/NotificationsPage'
+// Lazy — pulls in three.js/globe only when an admin opens the map.
+const MapPage = lazy(() => import('./pages/MapPage').then(m => ({ default: m.MapPage })))
 import { SettingsPage } from './pages/SettingsPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
@@ -64,6 +67,14 @@ function App() {
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="leaderboard" element={<LeaderboardPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
+              <Route
+                path="map"
+                element={
+                  <Suspense fallback={<Loader />}>
+                    <MapPage />
+                  </Suspense>
+                }
+              />
               <Route path="reports" element={<ReportsPage />} />
 
               <Route element={<RequireSuperAdmin />}>

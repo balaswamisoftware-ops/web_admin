@@ -26,7 +26,13 @@ import { formatIndianCompact, formatDateTime, formatNumber } from '../lib/format
 
 /* ── Devotional audio ─────────────────────────────────────────── */
 
-const AUDIO_EXTS = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'weba', 'mp4']
+// `mpeg`/`mpga` are here because a browser saving a `Content-Type: audio/mpeg`
+// download often names it `.mpeg` — a perfectly ordinary MP3 that Windows maps
+// to `video/mpeg`, so it fails an `audio/*` filter and vanishes from the picker.
+const AUDIO_EXTS = [
+  'mp3', 'mpeg', 'mpga', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac',
+  'weba', 'mp4',
+]
 
 /**
  * Windows builds the picker's filter list from its own registry MIME map, so a

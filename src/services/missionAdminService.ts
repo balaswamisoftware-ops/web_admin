@@ -89,6 +89,22 @@ function mapChant(r: Row): ChantEntry {
 }
 
 /** Dashboard + chant + donation + settings operations for the admin portal. */
+/** Content type to store a clip under, given what the browser reported. */
+function audioContentType(file: File): string {
+  // Trust the browser only when it already says "audio/…". It derives the type
+  // from the OS, which maps `.mpeg` to `video/mpeg` — storing an ordinary MP3
+  // as video makes it refuse to play in an <audio> element or the device player.
+  if (file.type.startsWith('audio/')) return file.type
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  const byExt: Record<string, string> = {
+    mp3: 'audio/mpeg', mpeg: 'audio/mpeg', mpga: 'audio/mpeg',
+    m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac',
+    wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg',
+    opus: 'audio/opus', flac: 'audio/flac', weba: 'audio/webm',
+  }
+  return byExt[ext] ?? 'audio/mpeg'
+}
+
 export const missionAdminService = {
   async dashboardStats(): Promise<DashboardStats> {
     const { data, error } = await client().rpc('admin_dashboard_stats')
@@ -337,7 +353,7 @@ export const missionAdminService = {
     const path = `devotional.${ext}`
     const { error } = await client()
       .storage.from('app-audio')
-      .upload(path, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
+      .upload(path, file, { upsert: true, contentType: audioContentType(file) })
     if (error) throw new Error(error.message)
     const { data } = client().storage.from('app-audio').getPublicUrl(path)
     return `${data.publicUrl}?v=${Date.now()}`

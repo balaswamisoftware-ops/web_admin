@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'react-globe.gl'
-import { Globe2, RefreshCw, MapPin, AlertCircle } from 'lucide-react'
+import { Globe2, RefreshCw, MapPin, AlertCircle, Maximize2, Minimize2 } from 'lucide-react'
 import { locationsService, type UserLocation } from '../services/locationsService'
 
 // three-globe's own example textures — a photorealistic Earth + starfield.
@@ -16,6 +16,20 @@ export function MapPage() {
   const [points, setPoints] = useState<UserLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  const toggleFullscreen = useCallback(() => {
+    const node = wrapRef.current
+    if (!node) return
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void node.requestFullscreen()
+  }, [])
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
 
   const load = () => {
     setLoading(true)
@@ -101,8 +115,21 @@ export function MapPage() {
 
       <div
         ref={wrapRef}
-        className="relative h-[68vh] overflow-hidden rounded-3xl border border-stone-200/70 bg-black dark:border-white/10"
+        className={`relative overflow-hidden bg-black ${
+          isFullscreen
+            ? 'h-screen w-screen'
+            : 'h-[68vh] rounded-3xl border border-stone-200/70 dark:border-white/10'
+        }`}
       >
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={isFullscreen ? 'Exit full screen (Esc)' : 'Full screen'}
+          aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
+          className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg bg-black/50 text-white/90 backdrop-blur transition-colors hover:bg-black/70"
+        >
+          {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+        </button>
         {!loading && total === 0 ? (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-stone-400">
             <MapPin size={28} />

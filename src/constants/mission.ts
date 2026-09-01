@@ -14,5 +14,11 @@
 /** Each devotee's personal chant goal — 1 Lakh (1,00,000). */
 export const PERSONAL_CHANT_TARGET = 100_000
 
-/** Community-wide achievement goal — 11 Crore (11,00,00,000) for all devotees. */
+/**
+ * Community-wide achievement goal — 11 Crore (11,00,00,000) for all devotees.
+ *
+ * FALLBACK ONLY. The live goal is `settings.community_target`, editable in
+ * Settings → Mission goals and raisable once it has been reached; this value is
+ * used only until that read lands, or if it fails.
+ */
 export const COMMUNITY_CHANT_TARGET = 110_000_000

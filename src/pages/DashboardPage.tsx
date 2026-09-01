@@ -25,10 +25,7 @@ import {
   formatNumber,
 } from '../lib/format'
 import { StatCard, LineChart } from '../components/ui'
-import {
-  COMMUNITY_CHANT_TARGET,
-  PERSONAL_CHANT_TARGET,
-} from '../constants/mission'
+import { PERSONAL_CHANT_TARGET } from '../constants/mission'
 
 function greeting() {
   const h = new Date().getHours()
@@ -101,7 +98,12 @@ function Funnel({
 
 export function DashboardPage() {
   const { stats, loading: statsLoading, error: statsError } = useDashboardStats()
-  const { analytics, loading: analyticsLoading, error: analyticsError } = useAnalytics(30)
+  const {
+    analytics,
+    communityTarget,
+    loading: analyticsLoading,
+    error: analyticsError,
+  } = useAnalytics(30)
   const { admin } = useAdminAuth()
 
   const [recent, setRecent] = useState<Devotee[]>([])
@@ -132,10 +134,13 @@ export function DashboardPage() {
   const s = <T,>(v: T) => (statsLoading || !stats ? '—' : v)
   const a = <T,>(v: T) => (analyticsLoading || !analytics ? '—' : v)
 
-  // Community achievement: total chants across ALL devotees vs the 11 Cr goal.
+  // Community achievement: total chants across ALL devotees vs the admin-set
+  // goal. It can be raised at any time (Settings → Mission goals), so nothing
+  // here may assume the launch figure of 11 Cr.
   const totalChants = stats?.totalChants ?? 0
-  const pct = Math.min(100, (totalChants / COMMUNITY_CHANT_TARGET) * 100)
-  const communityRemaining = Math.max(0, COMMUNITY_CHANT_TARGET - totalChants)
+  const pct = Math.min(100, (totalChants / Math.max(1, communityTarget)) * 100)
+  const communityRemaining = Math.max(0, communityTarget - totalChants)
+  const goalReached = Boolean(stats) && totalChants >= communityTarget
   const personalTarget =
     stats?.target && stats.target > 0 ? stats.target : PERSONAL_CHANT_TARGET
 
@@ -170,7 +175,7 @@ export function DashboardPage() {
               </strong>{' '}
               personal goal — together we aim for{' '}
               <strong className="font-semibold">
-                {formatIndianCompact(COMMUNITY_CHANT_TARGET)}
+                {formatIndianCompact(communityTarget)}
               </strong>{' '}
               chants.
             </p>
@@ -179,7 +184,7 @@ export function DashboardPage() {
           {/* Community mission progress (all devotees vs 11 Cr) */}
           <div className="min-w-[240px] rounded-2xl bg-white/15 p-4 ring-1 ring-white/20 backdrop-blur-md">
             <div className="flex items-center justify-between text-xs font-medium text-white/80">
-              <span>Community goal · {formatIndianCompact(COMMUNITY_CHANT_TARGET)}</span>
+              <span>Community goal · {formatIndianCompact(communityTarget)}</span>
               <span>{pct.toFixed(2)}%</span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/25">
@@ -190,13 +195,21 @@ export function DashboardPage() {
             </div>
             <div className="mt-2 text-xs text-white/80">
               {stats
-                ? `${formatNumber(totalChants)} of ${formatNumber(COMMUNITY_CHANT_TARGET)} chants`
+                ? `${formatNumber(totalChants)} of ${formatNumber(communityTarget)} chants`
                 : 'Loading…'}
             </div>
-            {projection && (
-              <div className="mt-2 border-t border-white/20 pt-2 text-xs text-white/80">
-                At {formatNumber(projection.avgPerDay)}/day → <strong>{projectedLabel}</strong>
+            {goalReached ? (
+              <div className="mt-2 border-t border-white/20 pt-2 text-xs text-white/90">
+                <strong>Goal reached</strong> — raise it in Settings to carry the
+                mission further.
               </div>
+            ) : (
+              projection && (
+                <div className="mt-2 border-t border-white/20 pt-2 text-xs text-white/80">
+                  At {formatNumber(projection.avgPerDay)}/day →{' '}
+                  <strong>{projectedLabel}</strong>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -227,16 +240,22 @@ export function DashboardPage() {
           tint="bg-rose-100 text-rose-700"
           hint={
             stats
-              ? `${pct.toFixed(2)}% of ${formatIndianCompact(COMMUNITY_CHANT_TARGET)}`
+              ? `${pct.toFixed(2)}% of ${formatIndianCompact(communityTarget)}`
               : undefined
           }
         />
         <StatCard
           icon={Target}
-          label="Remaining to 11 Cr"
-          value={s(formatNumber(communityRemaining))}
-          tint="bg-amber-100 text-amber-700"
-          hint={stats ? `Goal: ${formatIndianCompact(COMMUNITY_CHANT_TARGET)}` : undefined}
+          label={
+            goalReached
+              ? 'Community goal'
+              : `Remaining to ${formatIndianCompact(communityTarget)}`
+          }
+          value={goalReached ? 'Reached 🎉' : s(formatNumber(communityRemaining))}
+          tint={
+            goalReached ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+          }
+          hint={stats ? `Goal: ${formatIndianCompact(communityTarget)}` : undefined}
         />
         <StatCard
           icon={HandCoins}

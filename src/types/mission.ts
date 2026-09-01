@@ -171,6 +171,12 @@ export interface ChantLevel {
 
 export interface MissionSettings {
   target: number
+  /**
+   * The collective goal all devotees chant towards (11 Crore at launch). Purely
+   * a progress marker — it never blocks chanting, so raising it once it has
+   * been crossed simply extends the mission.
+   */
+  communityTarget: number
   donationAmount: number
   phonepeNumber: string
   upiId: string

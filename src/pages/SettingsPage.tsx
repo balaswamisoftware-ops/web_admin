@@ -11,6 +11,7 @@ import {
   Music,
   Upload,
   Trophy,
+  PartyPopper,
   Plus,
   Minus,
   CheckCircle2,
@@ -21,8 +22,7 @@ import type { ChantLevel, MissionSettings, SettingsMeta } from '../types/mission
 import { missionAdminService } from '../services/missionAdminService'
 import { ceilingOf, validateLevels } from '../lib/levels'
 import { Button, useToast } from '../components/ui'
-import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
-import { formatIndianCompact, formatDateTime } from '../lib/format'
+import { formatIndianCompact, formatDateTime, formatNumber } from '../lib/format'
 
 /* ── Devotional audio ─────────────────────────────────────────── */
 
@@ -40,6 +40,25 @@ function isAudioFile(file: File) {
   if (file.type.startsWith('audio/')) return true
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
   return AUDIO_EXTS.includes(ext)
+}
+
+/* ── Community goal ───────────────────────────────────────────────────────── */
+
+const CRORE = 10_000_000
+
+/** Ready-made community goals, in crores — the shapes a mission actually uses. */
+const GOAL_PRESETS = [11, 21, 51, 108].map(cr => cr * CRORE)
+
+/**
+ * Sensible next goals once the current one is reached. Always strictly above
+ * the chants already done, so extending can never land on an already-passed
+ * number, and always a whole crore so the new goal still reads as a milestone.
+ */
+function extensions(current: number, total: number): number[] {
+  const floor = Math.max(current, total)
+  const nextCrore = (n: number) => Math.ceil(n / CRORE) * CRORE
+  const options = [nextCrore(floor + CRORE), nextCrore(floor * 1.5), nextCrore(floor * 2)]
+  return [...new Set(options)].filter(n => n > floor).slice(0, 3)
 }
 
 /* ── Small building blocks ────────────────────────────────────────────────── */
@@ -165,12 +184,17 @@ export function SettingsPage() {
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
   const toast = useToast()
   const audioInputRef = useRef<HTMLInputElement>(null)
+  // The community goal is judged against what has actually been chanted, so the
+  // page needs the live total as well as the settings row.
+  const [totalChants, setTotalChants] = useState<number | null>(null)
+  const [savedGoal, setSavedGoal] = useState<number | null>(null)
 
   useEffect(() => {
     missionAdminService
       .getSettings()
       .then(data => {
         setForm(data)
+        setSavedGoal(data.communityTarget)
         initialRef.current = JSON.stringify(data)
       })
       .catch(err => setFeedback({ ok: false, msg: err.message }))
@@ -180,6 +204,13 @@ export function SettingsPage() {
     missionAdminService
       .settingsMeta()
       .then(setMeta)
+      .catch(() => {})
+
+    // Also best-effort — without it the goal field simply loses its progress
+    // line and its "already reached" nudge.
+    missionAdminService
+      .dashboardStats()
+      .then(st => setTotalChants(st.totalChants))
       .catch(() => {})
   }, [])
 
@@ -202,6 +233,25 @@ export function SettingsPage() {
     () => (form ? validateLevels(form.chantLevels) : null),
     [form],
   )
+
+  /**
+   * A goal below the chants already done would render the mission permanently
+   * over-complete. Only flagged when the admin *changes* it to such a value —
+   * a goal simply overtaken by devotees is a success, not an error, and must
+   * never lock the rest of the page out of saving.
+   */
+  const goalError = useMemo(() => {
+    if (!form || totalChants === null || savedGoal === null) return null
+    if (form.communityTarget === savedGoal) return null
+    if (form.communityTarget < 1) return 'The community goal must be at least 1.'
+    return form.communityTarget < totalChants
+      ? `Devotees have already chanted ${formatNumber(totalChants)}. Set the goal above the current total.`
+      : null
+  }, [form, totalChants, savedGoal])
+
+  /** The saved goal has been reached — the admin can extend the mission. */
+  const goalReached =
+    savedGoal !== null && totalChants !== null && totalChants >= savedGoal
 
   /* ── Level editing ──────────────────────────────────────────────────────── */
 
@@ -251,11 +301,16 @@ export function SettingsPage() {
       toast.error(levelError)
       return
     }
+    if (goalError) {
+      toast.error(goalError)
+      return
+    }
     setSaving(true)
     setFeedback(null)
     try {
       await missionAdminService.updateSettings(form)
       initialRef.current = JSON.stringify(form)
+      setSavedGoal(form.communityTarget)
       setFeedback({ ok: true, msg: 'Settings saved.' })
       missionAdminService.settingsMeta().then(setMeta).catch(() => {})
     } catch (err) {
@@ -375,15 +430,100 @@ export function SettingsPage() {
               </Field>
               <Field
                 label="Community achievement goal"
-                hint="Collective goal across all devotees (set in code)."
+                hint={`Collective goal across all devotees — ${formatIndianCompact(
+                  form.communityTarget,
+                )} (${formatNumber(form.communityTarget)}).`}
               >
                 <input
-                  readOnly
-                  className={`${inputCls} cursor-not-allowed bg-stone-50 text-stone-500 dark:bg-neutral-800`}
-                  value={`${formatIndianCompact(COMMUNITY_CHANT_TARGET)}  (${COMMUNITY_CHANT_TARGET.toLocaleString('en-IN')})`}
+                  type="number"
+                  min={1}
+                  className={inputCls}
+                  value={form.communityTarget}
+                  onChange={e => set('communityTarget', parseInt(e.target.value, 10) || 0)}
                 />
               </Field>
             </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {GOAL_PRESETS.map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => set('communityTarget', preset)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    form.communityTarget === preset
+                      ? 'bg-brand-100 text-brand-700 dark:bg-brand-950/50 dark:text-brand-200'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-neutral-800 dark:text-stone-300'
+                  }`}
+                >
+                  {formatIndianCompact(preset)}
+                </button>
+              ))}
+            </div>
+
+            {goalError && (
+              <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+                <AlertTriangle size={15} className="mt-px shrink-0" />
+                {goalError}
+              </p>
+            )}
+
+            {/* Progress against the goal as it stands saved — and, once it is
+                reached, the one-tap way to carry the mission further. */}
+            {totalChants !== null && savedGoal !== null && (
+              <div className="mt-4 rounded-xl border border-stone-200 p-4 dark:border-neutral-800">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium text-stone-800 dark:text-stone-100">
+                    {formatNumber(totalChants)} chanted
+                  </span>
+                  <span className="text-xs text-stone-400">
+                    {Math.min(100, (totalChants / Math.max(1, savedGoal)) * 100).toFixed(2)}%
+                    of {formatIndianCompact(savedGoal)}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100 dark:bg-neutral-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600"
+                    style={{
+                      width: `${Math.min(100, (totalChants / Math.max(1, savedGoal)) * 100)}%`,
+                    }}
+                  />
+                </div>
+
+                {goalReached ? (
+                  <div className="mt-4">
+                    <p className="flex items-start gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      <PartyPopper size={16} className="mt-px shrink-0" />
+                      Goal reached — devotees have completed{' '}
+                      {formatIndianCompact(savedGoal)}.
+                    </p>
+                    <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                      Extend it to keep the mission going. Nothing is reset and no
+                      chant is lost — only the goal everyone is measured against
+                      moves up.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {extensions(savedGoal, totalChants).map(next => (
+                        <button
+                          key={next}
+                          type="button"
+                          onClick={() => set('communityTarget', next)}
+                          className="rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
+                        >
+                          Extend to {formatIndianCompact(next)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-stone-400">
+                    {formatNumber(Math.max(0, savedGoal - totalChants))} chants
+                    remaining. Raising the goal never resets progress — the bar
+                    simply measures against the new number.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Per-submission input cap. Off = the devotee types whatever they
                 like; on = they can submit at most the number set here. */}

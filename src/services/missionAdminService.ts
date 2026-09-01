@@ -96,14 +96,32 @@ export const missionAdminService = {
     return { ...EMPTY_STATS, ...(data as Partial<DashboardStats>) }
   },
 
-  /** Velocity, funnel and the projected community-goal date. */
-  async analytics(days = 30): Promise<Analytics> {
+  /**
+   * Velocity, funnel and the projected community-goal date. The target is the
+   * admin-set one; the constant is only the fallback for a settings read that
+   * failed, so the projection is never computed against a stale goal.
+   */
+  async analytics(days = 30, communityTarget = COMMUNITY_CHANT_TARGET): Promise<Analytics> {
     const { data, error } = await client().rpc('admin_analytics', {
       days,
-      community_target: COMMUNITY_CHANT_TARGET,
+      community_target: communityTarget,
     })
     if (error) throw new Error(error.message)
     return data as Analytics
+  },
+
+  /**
+   * Just the community goal. Cheaper than `getSettings()` for the dashboard,
+   * which needs the number but none of the rest of the settings row.
+   */
+  async communityTarget(): Promise<number> {
+    const { data, error } = await client()
+      .from('settings')
+      .select('community_target')
+      .eq('id', 1)
+      .single()
+    if (error) throw new Error(error.message)
+    return Number(data.community_target) || COMMUNITY_CHANT_TARGET
   },
 
   // ---- Donations ----
@@ -274,13 +292,14 @@ export const missionAdminService = {
     const { data, error } = await client()
       .from('settings')
       .select(
-        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title, chant_levels',
+        'target, community_target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title, chant_levels',
       )
       .eq('id', 1)
       .single()
     if (error) throw new Error(error.message)
     return {
       target: data.target ?? 100000,
+      communityTarget: Number(data.community_target) || COMMUNITY_CHANT_TARGET,
       donationAmount: data.donation_amount ?? 216,
       phonepeNumber: data.phonepe_number ?? '',
       upiId: data.upi_id ?? '',
@@ -327,6 +346,8 @@ export const missionAdminService = {
   async updateSettings(patch: Partial<MissionSettings>) {
     const row: Record<string, unknown> = {}
     if (patch.target !== undefined) row.target = patch.target
+    if (patch.communityTarget !== undefined)
+      row.community_target = Math.max(1, Math.floor(patch.communityTarget))
     if (patch.donationAmount !== undefined) row.donation_amount = patch.donationAmount
     if (patch.phonepeNumber !== undefined) row.phonepe_number = patch.phonepeNumber
     if (patch.upiId !== undefined) row.upi_id = patch.upiId

@@ -1,5 +1,6 @@
 import { getSupabaseClient } from '../lib/supabaseClient'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
+import { parseLevels, validateLevels } from '../lib/levels'
 import type {
   Analytics,
   ChantEntry,
@@ -242,12 +243,17 @@ export const missionAdminService = {
     if (error) throw new Error(error.message)
     const d = data as {
       target: number
+      ceiling?: number
       tiers: Milestones['tiers']
+      levels?: Milestones['levels']
       completers: Row[]
     }
     return {
       target: d.target,
+      ceiling: d.ceiling ?? 0,
       tiers: d.tiers ?? [],
+      // Empty on a server that predates the ladder; the page hides the card then.
+      levels: d.levels ?? [],
       completers: (d.completers ?? []).map(
         (r): Completer => ({
           devoteeId: r.devotee_id as string,
@@ -268,7 +274,7 @@ export const missionAdminService = {
     const { data, error } = await client()
       .from('settings')
       .select(
-        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title',
+        'target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title, chant_levels',
       )
       .eq('id', 1)
       .single()
@@ -294,6 +300,7 @@ export const missionAdminService = {
       audioEnabled: data.audio_enabled ?? false,
       audioUrl: data.audio_url ?? '',
       audioTitle: data.audio_title ?? '',
+      chantLevels: parseLevels(data.chant_levels),
     }
   },
 
@@ -345,6 +352,18 @@ export const missionAdminService = {
     if (patch.audioEnabled !== undefined) row.audio_enabled = patch.audioEnabled
     if (patch.audioUrl !== undefined) row.audio_url = patch.audioUrl.trim()
     if (patch.audioTitle !== undefined) row.audio_title = patch.audioTitle.trim()
+    if (patch.chantLevels !== undefined) {
+      // Caught here as well as in Postgres, so a bad ladder never costs a round
+      // trip — `validate_chant_levels()` remains the authority.
+      const problem = validateLevels(patch.chantLevels)
+      if (problem) throw new Error(problem)
+      row.chant_levels = patch.chantLevels.map((l, i) => ({
+        n: i + 1,
+        name: l.name.trim(),
+        from: Math.floor(l.from),
+        to: Math.floor(l.to),
+      }))
+    }
     // Go through the audited RPC so the change is snapshotted + revertible.
     const { error } = await client().rpc('admin_update_settings', { patch: row })
     if (error) throw new Error(error.message)

@@ -10,12 +10,16 @@ import {
   Bell,
   Music,
   Upload,
+  Trophy,
+  Plus,
+  Minus,
   CheckCircle2,
   AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
-import type { MissionSettings, SettingsMeta } from '../types/mission'
+import type { ChantLevel, MissionSettings, SettingsMeta } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
+import { ceilingOf, validateLevels } from '../lib/levels'
 import { Button, useToast } from '../components/ui'
 import { COMMUNITY_CHANT_TARGET } from '../constants/mission'
 import { formatIndianCompact, formatDateTime } from '../lib/format'
@@ -192,8 +196,61 @@ export function SettingsPage() {
       ? 'Minimum version is higher than the latest version — even users on the newest build would be blocked. Keep minimum ≤ latest.'
       : null
 
+  // The same rules Postgres enforces, run live so the admin sees the problem as
+  // they type instead of after a failed save.
+  const levelError = useMemo(
+    () => (form ? validateLevels(form.chantLevels) : null),
+    [form],
+  )
+
+  /* ── Level editing ──────────────────────────────────────────────────────── */
+
+  const setLevels = (levels: ChantLevel[]) =>
+    setForm(prev =>
+      prev ? { ...prev, chantLevels: levels.map((l, i) => ({ ...l, n: i + 1 })) } : prev,
+    )
+
+  const setLevelName = (i: number, name: string) => {
+    if (!form) return
+    setLevels(form.chantLevels.map((l, j) => (j === i ? { ...l, name } : l)))
+  }
+
+  /**
+   * Moving a boundary drags the next level's start with it, so the ladder can
+   * never develop a gap or an overlap — the one shape of mistake that would be
+   * tedious to repair by hand.
+   */
+  const setLevelTo = (i: number, to: number) => {
+    if (!form) return
+    setLevels(
+      form.chantLevels.map((l, j) =>
+        j === i ? { ...l, to } : j === i + 1 ? { ...l, from: to } : l,
+      ),
+    )
+  }
+
+  const addLevel = () => {
+    if (!form) return
+    const last = form.chantLevels[form.chantLevels.length - 1]
+    const from = last ? last.to : 0
+    const span = last ? Math.max(1, last.to - last.from) : 100000
+    setLevels([
+      ...form.chantLevels,
+      { n: form.chantLevels.length + 1, name: '', from, to: from + span },
+    ])
+  }
+
+  const removeLevel = () => {
+    if (!form || form.chantLevels.length <= 1) return
+    setLevels(form.chantLevels.slice(0, -1))
+  }
+
   const save = async () => {
     if (!form) return
+    if (levelError) {
+      toast.error(levelError)
+      return
+    }
     setSaving(true)
     setFeedback(null)
     try {
@@ -634,6 +691,95 @@ export function SettingsPage() {
                 </Field>
               ))}
             </div>
+          </Section>
+
+          {/* Chant levels */}
+          <Section
+            icon={Trophy}
+            title="Chant levels"
+            description="The ladder devotees climb. The end of the last level is the hard ceiling — no chant beyond it is accepted"
+            tint="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+            className="lg:col-span-2"
+          >
+            <div className="space-y-2.5">
+              {form.chantLevels.map((level, i) => {
+                const isLast = i === form.chantLevels.length - 1
+                return (
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-neutral-700 dark:bg-neutral-800/40"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-lg bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-[9rem] flex-1">
+                      <Field label="Name">
+                        <input
+                          className={inputCls}
+                          value={level.name}
+                          onChange={e => setLevelName(i, e.target.value)}
+                          placeholder={`Level ${i + 1}`}
+                        />
+                      </Field>
+                    </div>
+                    <div className="w-32">
+                      {/* Read-only: a level always starts where the previous one
+                          ended, so a gap or an overlap is impossible to type. */}
+                      <Field label="From">
+                        <input
+                          className={`${inputCls} bg-stone-100 text-stone-500 dark:bg-neutral-800`}
+                          value={level.from.toLocaleString('en-IN')}
+                          readOnly
+                          tabIndex={-1}
+                        />
+                      </Field>
+                    </div>
+                    <div className="w-36">
+                      <Field label={isLast ? 'To (ceiling)' : 'To'}>
+                        <input
+                          className={inputCls}
+                          type="number"
+                          min={level.from + 1}
+                          step={1000}
+                          value={level.to}
+                          onChange={e =>
+                            setLevelTo(i, Math.max(0, Math.floor(Number(e.target.value) || 0)))
+                          }
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button variant="secondary" leftIcon={Plus} onPress={addLevel}>
+                Add level
+              </Button>
+              <Button
+                variant="secondary"
+                leftIcon={Minus}
+                isDisabled={form.chantLevels.length <= 1}
+                onPress={removeLevel}
+              >
+                Remove last
+              </Button>
+              <span className="text-xs text-stone-400">
+                Devotees can chant up to{' '}
+                <strong className="text-stone-600 dark:text-stone-300">
+                  {ceilingOf(form.chantLevels).toLocaleString('en-IN')}
+                </strong>{' '}
+                in total.
+              </span>
+            </div>
+
+            {levelError && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertTriangle size={15} className="mt-px shrink-0" />
+                <span>{levelError}</span>
+              </div>
+            )}
           </Section>
 
           {/* Devotional audio */}

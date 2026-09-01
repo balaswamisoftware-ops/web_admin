@@ -26,6 +26,7 @@ import {
 } from '../components/leaderboard/CertificateDialog'
 import { formatDate, formatMobile, formatNumber } from '../lib/format'
 import { exportCsv } from '../lib/exportCsv'
+import { levelFor } from '../lib/levels'
 
 /** Gold / silver / bronze for the top three, plain rank after that. */
 function RankBadge({ rank }: { rank: number }) {
@@ -95,6 +96,7 @@ export function LeaderboardPage() {
         { header: 'Mobile', value: r => r.mobile },
         { header: 'Nakshatram', value: r => r.nakshatram },
         { header: 'Chants', value: r => r.count },
+        { header: 'Level', value: r => levelFor(r.count, levels)?.name ?? '' },
         { header: 'Malas', value: r => r.malas },
         { header: 'Percent of goal', value: r => `${r.pct}%` },
         { header: 'Goal reached', value: r => (r.completed ? 'Yes' : 'No') },
@@ -110,6 +112,9 @@ export function LeaderboardPage() {
   }
 
   const completers = milestones?.completers ?? []
+  // Empty on a server that predates the ladder — `levelFor` then returns null
+  // and every level chip simply disappears.
+  const levels = milestones?.levels ?? []
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -167,6 +172,36 @@ export function LeaderboardPage() {
               <div className="text-xs font-medium text-stone-500">{tier.label}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Where devotees stand on the chant ladder */}
+      {levels.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/70">
+          <div className="mb-4 flex items-center gap-2">
+            <Award size={16} className="text-brand-500" />
+            <h2 className="text-sm font-semibold text-stone-900 dark:text-white">
+              Devotees by level
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {levels.map(level => (
+              <div
+                key={level.n}
+                className="rounded-xl border border-stone-200 bg-stone-50/60 p-3 text-center dark:border-neutral-700 dark:bg-neutral-800/40"
+              >
+                <div className="text-xl font-bold text-stone-900 dark:text-white">
+                  {formatNumber(level.count)}
+                </div>
+                <div className="text-xs font-medium text-brand-600 dark:text-brand-300">
+                  {level.name}
+                </div>
+                <div className="text-[11px] text-stone-400">
+                  {formatNumber(level.from)}–{formatNumber(level.to)}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -241,6 +276,11 @@ export function LeaderboardPage() {
                     <div className="text-xs text-stone-400">
                       {formatNumber(r.malas)} malas · {r.pct}%
                     </div>
+                    {levelFor(r.count, levels) && (
+                      <div className="text-xs font-medium text-brand-600 dark:text-brand-300">
+                        {levelFor(r.count, levels)?.name}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">

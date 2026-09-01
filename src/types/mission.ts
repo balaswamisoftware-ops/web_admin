@@ -126,9 +126,18 @@ export interface Completer {
   donationStatus: DonationStatus | null
 }
 
+/** One rung of the ladder, with how many devotees are standing on it. */
+export interface LevelStanding extends ChantLevel {
+  count: number
+}
+
 export interface Milestones {
   target: number
+  /** The hard ceiling — the end of the last chant level. */
+  ceiling: number
   tiers: MilestoneTier[]
+  /** Devotees per chant level. Empty on a server that predates the ladder. */
+  levels: LevelStanding[]
   completers: Completer[]
 }
 
@@ -141,6 +150,23 @@ export interface SettingsMeta {
     at: string
     summary: string | null
   } | null
+}
+
+/**
+ * One rung of the chant ladder. The range is half-open `[from, to)`; the LAST
+ * level's `to` is inclusive and is the hard ceiling — no chant beyond it is ever
+ * accepted. Levels must be contiguous (`levels[i].to === levels[i+1].from`) and
+ * the first must start at 0; `validate_chant_levels()` enforces both server-side.
+ */
+export interface ChantLevel {
+  /** 1-based position on the ladder. */
+  n: number
+  /** The name devotees see, e.g. "Sadhaka". */
+  name: string
+  /** First chant count in this level. */
+  from: number
+  /** First chant count of the NEXT level (the ceiling on the last one). */
+  to: number
 }
 
 export interface MissionSettings {
@@ -177,4 +203,9 @@ export interface MissionSettings {
   audioEnabled: boolean
   audioUrl: string
   audioTitle: string
+  /**
+   * The chant-level ladder, ascending. The end of the last level is the hard
+   * ceiling every devotee chants towards.
+   */
+  chantLevels: ChantLevel[]
 }

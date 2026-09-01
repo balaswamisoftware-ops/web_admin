@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Globe from 'react-globe.gl'
 import { Globe2, RefreshCw, MapPin, AlertCircle, Maximize2, Minimize2 } from 'lucide-react'
 import { locationsService, type UserLocation } from '../services/locationsService'
+import { RegionBreakdown, type Region } from '../components/map/RegionBreakdown'
 
 // three-globe's own example textures — a photorealistic Earth + starfield.
 const EARTH = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'
@@ -23,6 +24,15 @@ export function MapPage() {
     if (!node) return
     if (document.fullscreenElement) void document.exitFullscreen()
     else void node.requestFullscreen()
+  }, [])
+
+  /** Centre the globe on a region picked from the breakdown tree. */
+  const flyTo = useCallback((r: Region) => {
+    const g = globeEl.current
+    if (!g) return
+    // Stop the idle spin, or it would immediately drift off the chosen region.
+    g.controls().autoRotate = false
+    g.pointOfView({ lat: r.lat, lng: r.lng, altitude: 1.1 }, 1000)
   }, [])
 
   useEffect(() => {
@@ -78,7 +88,7 @@ export function MapPage() {
   )
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
@@ -113,6 +123,7 @@ export function MapPage() {
         </div>
       )}
 
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div
         ref={wrapRef}
         className={`relative overflow-hidden bg-black ${
@@ -151,11 +162,17 @@ export function MapPage() {
           pointRadius={0.35}
           pointLabel={(d: object) => {
             const p = d as UserLocation
-            return `<div style="font:600 12px sans-serif;color:#fff">${p.fullName}</div>`
+            const where = [p.district, p.state, p.country].filter(Boolean).join(', ')
+            return `<div style="font:600 12px sans-serif;color:#fff">${p.fullName}</div>${
+              where ? `<div style="font:400 11px sans-serif;color:#cbd5e1">${where}</div>` : ''
+            }`
           }}
           atmosphereColor="#7dd3fc"
           atmosphereAltitude={0.18}
         />
+      </div>
+
+        <RegionBreakdown points={points} onPick={flyTo} />
       </div>
 
       <p className="mt-3 text-center text-xs text-stone-400">

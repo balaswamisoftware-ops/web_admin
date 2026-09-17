@@ -2,7 +2,9 @@ import { getSupabaseClient } from '../lib/supabaseClient'
 import { invokeWithRetry } from '../lib/invokeWithRetry'
 import type {
   NotificationCampaign,
+  NotificationRecipient,
   NotificationSegment,
+  SegmentKey,
   NotificationStatus,
   SegmentReach,
   SendResult,
@@ -41,6 +43,25 @@ export const notificationsService = {
     })
     if (error) throw new Error(error.message)
     return data as { devotees: number; devices: number }
+  },
+
+  /** Find a devotee by mobile (any format) for a one-person broadcast. */
+  async findRecipient(mobile: string): Promise<NotificationRecipient> {
+    const { data, error } = await client().rpc('admin_find_notification_recipient', {
+      p_mobile: mobile,
+    })
+    if (error) throw new Error(error.message)
+    return data as NotificationRecipient
+  },
+
+  /**
+   * Remove broadcasts that were created but never sent (still `queued`), e.g.
+   * when the send-push function was unreachable. Audited. Returns how many.
+   */
+  async discardQueued(): Promise<number> {
+    const { data, error } = await client().rpc('admin_discard_queued_notifications')
+    if (error) throw new Error(error.message)
+    return Number(data ?? 0)
   },
 
   /** Create the campaign (audited). Returns its id. */
@@ -102,6 +123,8 @@ export const notificationsService = {
         createdByName: (r.created_by_name as string) ?? null,
         createdAt: r.created_at as string,
         completedAt: (r.completed_at as string) ?? null,
+        targetName: (r.target_name as string) ?? null,
+        targetMobile: (r.target_mobile as string) ?? null,
       })),
       total: rows.length > 0 ? Number(rows[0].total_count ?? rows.length) : 0,
     }
@@ -110,7 +133,7 @@ export const notificationsService = {
 
 /** Segment labels + one-line descriptions, shown in the compose form. */
 export const SEGMENTS: {
-  key: NotificationSegment
+  key: SegmentKey
   label: string
   description: string
 }[] = [

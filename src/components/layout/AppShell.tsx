@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
+  Medal,
   LayoutDashboard,
   Users,
   Flame,
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { to: '/notifications', label: 'Broadcasts', icon: Bell },
   { to: '/map', label: 'World map', icon: Globe2 },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { to: '/levels', label: 'Chant levels', icon: Medal, superOnly: true },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, superOnly: true },
   { to: '/admins', label: 'Admins', icon: ShieldCheck, superOnly: true },
   { to: '/audit', label: 'Audit log', icon: History, superOnly: true },

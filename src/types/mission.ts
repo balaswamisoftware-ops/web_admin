@@ -167,7 +167,36 @@ export interface ChantLevel {
   from: number
   /** First chant count of the NEXT level (the ceiling on the last one). */
   to: number
+  /** The certificate a devotee earns at this level, if one is configured. */
+  certificate?: LevelCertificate | null
 }
+
+/**
+ * Where the devotee's name goes on a certificate, as FRACTIONS (0..1) of the
+ * image's width and height — so the box stays put however large the image is
+ * drawn, on the portal preview or on a phone.
+ */
+export interface CertificateBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** A level's certificate template: the image and how the name is printed on it. */
+export interface LevelCertificate {
+  imageUrl: string
+  /** The image's natural size in pixels — the resolution a certificate renders at. */
+  width: number
+  height: number
+  /** Null until the admin has marked where the name goes. */
+  box: CertificateBox | null
+  /** Name colour, `#rrggbb`. */
+  color: string
+  font: CertificateFont
+}
+
+export type CertificateFont = 'serif' | 'sans'
 
 export interface MissionSettings {
   target: number
@@ -209,6 +238,12 @@ export interface MissionSettings {
   audioEnabled: boolean
   audioUrl: string
   audioTitle: string
+  /**
+   * Whether devotees may download their level certificate. `null` means the
+   * `certificates_enabled` column does not exist yet (certificates.sql not run),
+   * so the portal can say so instead of pretending the switch saved.
+   */
+  certificatesEnabled: boolean | null
   /**
    * The chant-level ladder, ascending. The end of the last level is the hard
    * ceiling every devotee chants towards.

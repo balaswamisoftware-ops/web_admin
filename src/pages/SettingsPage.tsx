@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Settings as SettingsIcon,
   Save,
@@ -12,16 +13,14 @@ import {
   Upload,
   Trophy,
   PartyPopper,
-  Plus,
-  Minus,
+  ArrowRight,
   CheckCircle2,
   AlertTriangle,
-  type LucideIcon,
 } from 'lucide-react'
-import type { ChantLevel, MissionSettings, SettingsMeta } from '../types/mission'
+import type { MissionSettings, SettingsMeta } from '../types/mission'
 import { missionAdminService } from '../services/missionAdminService'
-import { ceilingOf, validateLevels } from '../lib/levels'
 import { Button, useToast } from '../components/ui'
+import { Field, Section, Toggle, inputCls } from '../components/settings/SettingsSection'
 import { formatIndianCompact, formatDateTime, formatNumber } from '../lib/format'
 
 /* ── Devotional audio ─────────────────────────────────────────── */
@@ -68,100 +67,6 @@ function extensions(current: number, total: number): number[] {
 }
 
 /* ── Small building blocks ────────────────────────────────────────────────── */
-
-const inputCls =
-  'h-11 w-full rounded-xl border border-stone-300 bg-white px-3.5 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/15 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-stone-500'
-
-/** A titled settings section with an icon chip and optional description. */
-function Section({
-  icon: Icon,
-  title,
-  description,
-  tint = 'bg-brand-100 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300',
-  className = '',
-  children,
-}: {
-  icon: LucideIcon
-  title: string
-  description?: string
-  tint?: string
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <section
-      className={`rounded-2xl border border-stone-200/70 bg-white/80 p-5 shadow-sm shadow-stone-900/[0.03] backdrop-blur-sm sm:p-6 dark:border-white/10 dark:bg-neutral-900/70 ${className}`}
-    >
-      <div className="mb-5 flex items-center gap-3">
-        <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/5 ${tint}`}
-        >
-          <Icon size={19} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-stone-900 dark:text-white">
-            {title}
-          </h2>
-          {description && (
-            <p className="text-xs text-stone-500 dark:text-stone-400">{description}</p>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-stone-700 dark:text-stone-200">
-        {label}
-      </span>
-      {children}
-      {hint && <span className="text-xs text-stone-400">{hint}</span>}
-    </label>
-  )
-}
-
-/** An accessible on/off switch. */
-function Toggle({
-  checked,
-  onChange,
-  tone = 'brand',
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  tone?: 'brand' | 'green'
-}) {
-  const on =
-    tone === 'green' ? 'bg-emerald-500' : 'bg-brand-500'
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 ${
-        checked ? on : 'bg-stone-300 dark:bg-neutral-700'
-      }`}
-    >
-      <span
-        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
-}
 
 /* ── Version compare (for the min > latest warning) ───────────────────────── */
 
@@ -233,13 +138,6 @@ export function SettingsPage() {
       ? 'Minimum version is higher than the latest version — even users on the newest build would be blocked. Keep minimum ≤ latest.'
       : null
 
-  // The same rules Postgres enforces, run live so the admin sees the problem as
-  // they type instead of after a failed save.
-  const levelError = useMemo(
-    () => (form ? validateLevels(form.chantLevels) : null),
-    [form],
-  )
-
   /**
    * A goal below the chants already done would render the mission permanently
    * over-complete. Only flagged when the admin *changes* it to such a value —
@@ -259,54 +157,8 @@ export function SettingsPage() {
   const goalReached =
     savedGoal !== null && totalChants !== null && totalChants >= savedGoal
 
-  /* ── Level editing ──────────────────────────────────────────────────────── */
-
-  const setLevels = (levels: ChantLevel[]) =>
-    setForm(prev =>
-      prev ? { ...prev, chantLevels: levels.map((l, i) => ({ ...l, n: i + 1 })) } : prev,
-    )
-
-  const setLevelName = (i: number, name: string) => {
-    if (!form) return
-    setLevels(form.chantLevels.map((l, j) => (j === i ? { ...l, name } : l)))
-  }
-
-  /**
-   * Moving a boundary drags the next level's start with it, so the ladder can
-   * never develop a gap or an overlap — the one shape of mistake that would be
-   * tedious to repair by hand.
-   */
-  const setLevelTo = (i: number, to: number) => {
-    if (!form) return
-    setLevels(
-      form.chantLevels.map((l, j) =>
-        j === i ? { ...l, to } : j === i + 1 ? { ...l, from: to } : l,
-      ),
-    )
-  }
-
-  const addLevel = () => {
-    if (!form) return
-    const last = form.chantLevels[form.chantLevels.length - 1]
-    const from = last ? last.to : 0
-    const span = last ? Math.max(1, last.to - last.from) : 100000
-    setLevels([
-      ...form.chantLevels,
-      { n: form.chantLevels.length + 1, name: '', from, to: from + span },
-    ])
-  }
-
-  const removeLevel = () => {
-    if (!form || form.chantLevels.length <= 1) return
-    setLevels(form.chantLevels.slice(0, -1))
-  }
-
   const save = async () => {
     if (!form) return
-    if (levelError) {
-      toast.error(levelError)
-      return
-    }
     if (goalError) {
       toast.error(goalError)
       return
@@ -314,7 +166,14 @@ export function SettingsPage() {
     setSaving(true)
     setFeedback(null)
     try {
-      await missionAdminService.updateSettings(form)
+      // Chant levels and the certificate-download switch are edited on the Chant
+      // levels page. Leave both out of this patch: `form` still holds them as they
+      // were when Settings opened, and sending them would silently undo a change
+      // saved on that page since.
+      const patch: Partial<MissionSettings> = { ...form }
+      delete patch.chantLevels
+      delete patch.certificatesEnabled
+      await missionAdminService.updateSettings(patch)
       initialRef.current = JSON.stringify(form)
       setSavedGoal(form.communityTarget)
       setFeedback({ ok: true, msg: 'Settings saved.' })
@@ -839,93 +698,21 @@ export function SettingsPage() {
             </div>
           </Section>
 
-          {/* Chant levels */}
+          {/* Chant levels moved to their own page — pointer for anyone who looks
+              here out of habit. */}
           <Section
             icon={Trophy}
             title="Chant levels"
-            description="The ladder devotees climb. The end of the last level is the hard ceiling — no chant beyond it is accepted"
+            description="The ladder devotees climb and the hard chant ceiling now have their own page"
             tint="bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
             className="lg:col-span-2"
           >
-            <div className="space-y-2.5">
-              {form.chantLevels.map((level, i) => {
-                const isLast = i === form.chantLevels.length - 1
-                return (
-                  <div
-                    key={i}
-                    className="flex flex-wrap items-end gap-3 rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-neutral-700 dark:bg-neutral-800/40"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-lg bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-[9rem] flex-1">
-                      <Field label="Name">
-                        <input
-                          className={inputCls}
-                          value={level.name}
-                          onChange={e => setLevelName(i, e.target.value)}
-                          placeholder={`Level ${i + 1}`}
-                        />
-                      </Field>
-                    </div>
-                    <div className="w-32">
-                      {/* Read-only: a level always starts where the previous one
-                          ended, so a gap or an overlap is impossible to type. */}
-                      <Field label="From">
-                        <input
-                          className={`${inputCls} bg-stone-100 text-stone-500 dark:bg-neutral-800`}
-                          value={level.from.toLocaleString('en-IN')}
-                          readOnly
-                          tabIndex={-1}
-                        />
-                      </Field>
-                    </div>
-                    <div className="w-36">
-                      <Field label={isLast ? 'To (ceiling)' : 'To'}>
-                        <input
-                          className={inputCls}
-                          type="number"
-                          min={level.from + 1}
-                          step={1000}
-                          value={level.to}
-                          onChange={e =>
-                            setLevelTo(i, Math.max(0, Math.floor(Number(e.target.value) || 0)))
-                          }
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button variant="secondary" leftIcon={Plus} onPress={addLevel}>
-                Add level
-              </Button>
-              <Button
-                variant="secondary"
-                leftIcon={Minus}
-                isDisabled={form.chantLevels.length <= 1}
-                onPress={removeLevel}
-              >
-                Remove last
-              </Button>
-              <span className="text-xs text-stone-400">
-                Devotees can chant up to{' '}
-                <strong className="text-stone-600 dark:text-stone-300">
-                  {ceilingOf(form.chantLevels).toLocaleString('en-IN')}
-                </strong>{' '}
-                in total.
-              </span>
-            </div>
-
-            {levelError && (
-              <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                <AlertTriangle size={15} className="mt-px shrink-0" />
-                <span>{levelError}</span>
-              </div>
-            )}
+            <Link
+              to="/levels"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            >
+              Open Chant levels <ArrowRight size={15} />
+            </Link>
           </Section>
 
           {/* Devotional audio */}

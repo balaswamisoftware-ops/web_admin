@@ -307,9 +307,10 @@ export const missionAdminService = {
   async getSettings(): Promise<MissionSettings> {
     const { data, error } = await client()
       .from('settings')
-      .select(
-        'target, community_target, donation_amount, phonepe_number, upi_id, qr_url, announcement, mission_active, chant_limit_enabled, chant_limit_max, latest_version, min_version, update_url, ads_enabled, admob_android_banner, admob_android_interstitial, admob_ios_banner, admob_ios_interstitial, audio_enabled, audio_url, audio_title, chant_levels',
-      )
+      // `*`, not a column list: naming a column that a not-yet-run migration adds
+      // (e.g. `certificates_enabled`) would fail the whole query and take every
+      // settings page down with it. Missing columns just read as undefined.
+      .select('*')
       .eq('id', 1)
       .single()
     if (error) throw new Error(error.message)
@@ -336,6 +337,8 @@ export const missionAdminService = {
       audioUrl: data.audio_url ?? '',
       audioTitle: data.audio_title ?? '',
       chantLevels: parseLevels(data.chant_levels),
+      certificatesEnabled:
+        typeof data.certificates_enabled === 'boolean' ? data.certificates_enabled : null,
     }
   },
 
@@ -357,6 +360,24 @@ export const missionAdminService = {
     if (error) throw new Error(error.message)
     const { data } = client().storage.from('app-audio').getPublicUrl(path)
     return `${data.publicUrl}?v=${Date.now()}`
+  },
+
+  /**
+   * Upload a certificate template image; returns its public URL.
+   *
+   * Every upload gets a NEW path rather than overwriting the level's current
+   * image. The config only points at it once the admin saves, so a template
+   * uploaded and then abandoned never changes the live certificate — and a
+   * saved one is never swapped out from under its marked name position.
+   */
+  async uploadCertificateImage(levelN: number, file: File): Promise<string> {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+    const path = `level-${levelN}/${Date.now()}.${ext}`
+    const { error } = await client()
+      .storage.from('certificates')
+      .upload(path, file, { contentType: file.type || 'image/png' })
+    if (error) throw new Error(error.message)
+    return client().storage.from('certificates').getPublicUrl(path).data.publicUrl
   },
 
   async updateSettings(patch: Partial<MissionSettings>) {
@@ -399,8 +420,11 @@ export const missionAdminService = {
         name: l.name.trim(),
         from: Math.floor(l.from),
         to: Math.floor(l.to),
+        ...(l.certificate ? { certificate: l.certificate } : {}),
       }))
     }
+    if (patch.certificatesEnabled != null)
+      row.certificates_enabled = patch.certificatesEnabled
     // Go through the audited RPC so the change is snapshotted + revertible.
     const { error } = await client().rpc('admin_update_settings', { patch: row })
     if (error) throw new Error(error.message)

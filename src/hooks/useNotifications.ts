@@ -65,6 +65,13 @@ export function useNotifications(pageSize = 10) {
     [load],
   )
 
+  /** Remove never-sent (queued) broadcasts, then reload. Returns how many. */
+  const discardQueued = useCallback(async (): Promise<number> => {
+    const n = await notificationsService.discardQueued()
+    await load()
+    return n
+  }, [load])
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
   return {
@@ -81,6 +88,7 @@ export function useNotifications(pageSize = 10) {
     sending,
     error,
     send,
+    discardQueued,
     refresh: load,
   }
 }

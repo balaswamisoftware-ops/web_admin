@@ -14,6 +14,7 @@ import { NotificationsPage } from './pages/NotificationsPage'
 // Lazy — pulls in three.js/globe only when an admin opens the map.
 const MapPage = lazy(() => import('./pages/MapPage').then(m => ({ default: m.MapPage })))
 import { SettingsPage } from './pages/SettingsPage'
+import { ChantLevelsPage } from './pages/ChantLevelsPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
 
@@ -79,6 +80,7 @@ function App() {
 
               <Route element={<RequireSuperAdmin />}>
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="levels" element={<ChantLevelsPage />} />
                 <Route path="admins" element={<AdminsPage />} />
                 <Route path="audit" element={<AuditLogsPage />} />
               </Route>

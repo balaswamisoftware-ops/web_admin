@@ -1,4 +1,5 @@
 import type { ChantLevel } from '../types/mission'
+import { parseCertificate } from './certificate'
 
 /**
  * Mirrors the seed in `chant-levels.sql`. Used when the server predates the
@@ -23,7 +24,10 @@ export function parseLevels(raw: unknown): ChantLevel[] {
       const to = Math.floor(Number(l.to))
       if (!Number.isFinite(from) || !Number.isFinite(to)) return null
       const name = typeof l.name === 'string' ? l.name.trim() : ''
-      return { n: i + 1, name: name || `Level ${i + 1}`, from, to }
+      // Carried through, not rebuilt: dropping it here would erase every
+      // certificate the next time the ladder is saved.
+      const certificate = parseCertificate(l.certificate)
+      return { n: i + 1, name: name || `Level ${i + 1}`, from, to, certificate }
     })
     .filter((l): l is ChantLevel => l !== null)
     .sort((a, b) => a.from - b.from)

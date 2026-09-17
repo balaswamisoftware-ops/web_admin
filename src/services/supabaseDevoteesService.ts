@@ -124,7 +124,7 @@ export const supabaseDevoteesService: DevoteesService = {
       logs: (d.logs ?? []).map(l => ({
         id: l.id,
         amount: Number(l.amount),
-        kind: (l.kind as 'add' | 'reset' | 'adjust') ?? 'add',
+        kind: (l.kind as 'add' | 'reset' | 'adjust' | 'revert') ?? 'add',
         createdAt: l.created_at,
       })),
       donations: (d.donations ?? []).map(r => ({

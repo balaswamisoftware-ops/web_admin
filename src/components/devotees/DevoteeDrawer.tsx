@@ -73,6 +73,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 /** The kind of a chant-log row decides its wording and colour. */
 function logStyle(amount: number, kind: string) {
+  // The devotee took chants off their own total from the app's History screen.
+  if (kind === 'revert') return { tone: 'danger' as const, label: 'Devotee reverted' }
   if (kind === 'reset') return { tone: 'danger' as const, label: 'Admin reset' }
   if (kind === 'adjust')
     return {

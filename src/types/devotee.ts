@@ -57,7 +57,7 @@ export interface ChantLogEntry {
   id: string
   /** Signed: negative when an admin reduced the count. */
   amount: number
-  kind: 'add' | 'reset' | 'adjust'
+  kind: 'add' | 'reset' | 'adjust' | 'revert'
   createdAt: string
 }
 

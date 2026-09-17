@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
+  UserCog,
   Medal,
   LayoutDashboard,
   Users,
@@ -24,6 +25,7 @@ type NavItem = { to: string; label: string; icon: LucideIcon; superOnly?: boolea
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/devotees', label: 'Devotees', icon: Users },
+  { to: '/devotee-admins', label: 'Devotee Admins', icon: UserCog },
   { to: '/chants', label: 'Chants', icon: Flame },
   { to: '/payments', label: 'Payments', icon: HandCoins },
   { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },

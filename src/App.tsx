@@ -6,6 +6,7 @@ import { AdminLoginPage } from './pages/AdminLoginPage'
 import { AppShell } from './components/layout/AppShell'
 import { DashboardPage } from './pages/DashboardPage'
 import { DevoteesPage } from './pages/DevoteesPage'
+import { DevoteeAdminsPage } from './pages/DevoteeAdminsPage'
 import { ChantsPage } from './pages/ChantsPage'
 import { PaymentsPage } from './pages/PaymentsPage'
 import { ReportsPage } from './pages/ReportsPage'
@@ -64,6 +65,7 @@ function App() {
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
               <Route path="devotees" element={<DevoteesPage />} />
+              <Route path="devotee-admins" element={<DevoteeAdminsPage />} />
               <Route path="chants" element={<ChantsPage />} />
               <Route path="payments" element={<PaymentsPage />} />
               <Route path="leaderboard" element={<LeaderboardPage />} />

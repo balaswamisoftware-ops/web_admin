@@ -17,7 +17,7 @@ export const DEFAULT_LEVELS: ChantLevel[] = [
 export function parseLevels(raw: unknown): ChantLevel[] {
   if (!Array.isArray(raw)) return DEFAULT_LEVELS
   const cleaned = raw
-    .map((item, i) => {
+    .map((item, i): ChantLevel | null => {
       if (!item || typeof item !== 'object') return null
       const l = item as Record<string, unknown>
       const from = Math.floor(Number(l.from))

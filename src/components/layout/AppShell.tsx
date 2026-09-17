@@ -106,21 +106,27 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen text-stone-900 dark:text-stone-100">
       {/* Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-stone-200/70 bg-white/70 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/60 md:flex">
-        <div className="mb-8 px-1 pt-2">
+      {/* Full-height column: the brand and the account block stay put, and only
+          the menu scrolls — so Log out is always reachable, however many nav
+          items there are or however short the window is. */}
+      <aside className="sticky top-0 hidden h-screen max-h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-stone-200/70 bg-white/70 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-neutral-900/60 md:flex">
+        <div className="mb-8 shrink-0 px-1 pt-2">
           <Wordmark />
         </div>
 
-        <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">
+        <div className="mb-2 shrink-0 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400">
           Menu
         </div>
-        <nav className="flex flex-col gap-1">
+        {/* `min-h-0` is what lets this flex child shrink below its content
+            height — without it the list would push the footer off-screen
+            instead of scrolling. */}
+        <nav className="-mr-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-2">
           {nav.map(item => (
             <SideLink key={item.to} item={item} />
           ))}
         </nav>
 
-        <div className="mt-auto">
+        <div className="mt-4 shrink-0">
           <div className="flex items-center gap-3 rounded-2xl border border-stone-200/70 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-sm font-bold text-white shadow-sm">
               {initial}
